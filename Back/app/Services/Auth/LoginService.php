@@ -56,7 +56,7 @@ class LoginService
             throw new ApiException('Please complete your subscription before logging in.', 403);
         }
 
-        if (! $this->subscriptionService->userHasActiveSubscription($user)) {
+        if (! $this->subscriptionService->userHasRequiredAccess($user)) {
             throw new ApiException('Please complete your subscription before logging in.', 403);
         }
 

@@ -75,7 +75,7 @@ class PhoneMfaController extends Controller
             throw new ApiException('Please verify your email before continuing.', 403);
         }
 
-        if (! $user->is_active || ! $this->subscriptionService->userHasActiveSubscription($user)) {
+        if (! $user->is_active || ! $this->subscriptionService->userHasRequiredAccess($user)) {
             throw new ApiException('Please complete your subscription before logging in.', 403);
         }
 

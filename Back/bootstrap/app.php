@@ -1,6 +1,8 @@
 <?php
 
 use App\Exceptions\ApiException;
+use App\Console\Commands\ImportIrsExemptOrganizations;
+use App\Http\Middleware\EnsureAdminAccess;
 use App\Http\Middleware\EnsureNarLitUserAccess;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -17,10 +19,14 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withCommands([
+        ImportIrsExemptOrganizations::class,
+    ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
         $middleware->throttleApi('api');
         $middleware->alias([
+            'narlit.admin' => EnsureAdminAccess::class,
             'narlit.user.access' => EnsureNarLitUserAccess::class,
         ]);
     })

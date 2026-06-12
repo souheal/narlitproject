@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Auth\OtpService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Schema;
 
 class OtpVerificationController extends Controller
 {
@@ -29,6 +30,22 @@ class OtpVerificationController extends Controller
         }
 
         $verifiedUser = $this->otpService->verify($user, $request->validated('otp'));
+        $organizationProfile = Schema::hasTable('organization_profiles')
+            ? $verifiedUser->organizationProfile
+            : null;
+
+        if ($organizationProfile !== null) {
+            return $this->success('Email verified successfully. Your organization registration is pending review.', [
+                'organization' => [
+                    'public_id' => $organizationProfile->public_id,
+                    'organization_name' => $organizationProfile->organization_name,
+                    'email' => $verifiedUser->email,
+                    'irs_verified' => $organizationProfile->irs_verified,
+                    'verification_status' => $organizationProfile->verification_status,
+                ],
+                'next_step' => 'pending_review',
+            ]);
+        }
 
         return $this->success('Email verified successfully.', [
             'user' => [

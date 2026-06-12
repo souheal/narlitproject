@@ -4,9 +4,19 @@ namespace App\Services\Billing;
 
 use App\Models\Subscription;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class SubscriptionService
 {
+    public function userHasRequiredAccess(User $user): bool
+    {
+        if ($this->userIsOrganization($user)) {
+            return $user->organizationProfile?->verification_status === 'approved';
+        }
+
+        return $this->userHasActiveSubscription($user);
+    }
+
     public function userHasActiveSubscription(User $user): bool
     {
         return Subscription::query()
@@ -57,5 +67,10 @@ class SubscriptionService
         }
 
         return $subscription->refresh();
+    }
+
+    protected function userIsOrganization(User $user): bool
+    {
+        return DB::table('roles')->where('id', $user->role_id)->value('name') === 'organization';
     }
 }

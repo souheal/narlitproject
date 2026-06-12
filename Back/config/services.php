@@ -47,4 +47,16 @@ return [
         'currency' => 'USD',
     ],
 
+    'irs' => [
+        'verification_mode' => env('IRS_VERIFICATION_MODE', 'imported'),
+        'dataset_path' => env('IRS_DATASET_PATH'),
+        'eo_bmf_urls' => array_filter(array_map('trim', explode(',', (string) env(
+            'IRS_EO_BMF_URLS',
+            'https://www.irs.gov/pub/irs-soi/eo1.csv,https://www.irs.gov/pub/irs-soi/eo2.csv,https://www.irs.gov/pub/irs-soi/eo3.csv,https://www.irs.gov/pub/irs-soi/eo4.csv',
+        )))),
+        'name_match_threshold' => (int) env('IRS_NAME_MATCH_THRESHOLD', 90),
+        'allow_local_match' => (bool) env('IRS_ALLOW_LOCAL_MATCH', false),
+        'local_organizations' => [],
+    ],
+
 ];

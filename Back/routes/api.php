@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\OrganizationReviewController;
 use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Auth\OtpVerificationController;
+use App\Http\Controllers\Api\Auth\OrganizationRegistrationController;
 use App\Http\Controllers\Api\Auth\PhoneMfaController;
 use App\Http\Controllers\Api\Auth\RegistrationController;
 use App\Http\Controllers\Api\Billing\StripeCheckoutController;
@@ -12,6 +14,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     Route::prefix('auth')->group(function () {
         Route::post('/register', [RegistrationController::class, 'store'])->middleware('throttle:auth.register');
+        Route::post('/organization/register', [OrganizationRegistrationController::class, 'store'])->middleware('throttle:auth.organization.register');
         Route::post('/verify-otp', [OtpVerificationController::class, 'verify'])->middleware('throttle:auth.otp.verify');
         Route::post('/resend-otp', [OtpVerificationController::class, 'resend'])->middleware('throttle:auth.otp.resend');
         Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:auth.login');
@@ -32,4 +35,10 @@ Route::prefix('v1')->group(function () {
 
     Route::post('/billing/checkout', [StripeCheckoutController::class, 'store'])->middleware('throttle:billing.checkout');
     Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->middleware('throttle:billing.webhook');
+
+    Route::middleware(['auth:sanctum', 'narlit.admin'])->prefix('admin')->group(function () {
+        Route::get('/organizations', [OrganizationReviewController::class, 'index']);
+        Route::post('/organizations/{publicId}/approve', [OrganizationReviewController::class, 'approve']);
+        Route::post('/organizations/{publicId}/reject', [OrganizationReviewController::class, 'reject']);
+    });
 });

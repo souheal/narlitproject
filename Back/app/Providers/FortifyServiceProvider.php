@@ -34,6 +34,10 @@ class FortifyServiceProvider extends ServiceProvider
             Limit::perMinute(3)->by($request->ip()),
         ]);
 
+        RateLimiter::for('auth.organization.register', fn (Request $request) => [
+            Limit::perMinute(3)->by($request->ip()),
+        ]);
+
         RateLimiter::for('auth.login', fn (Request $request) => [
             Limit::perMinutes(15, 5)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
         ]);
