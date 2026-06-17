@@ -221,6 +221,7 @@ class OrganizationRegistrationFlowTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.next_step', 'completed')
+            ->assertJsonPath('data.user.username', 'org_org')
             ->assertJsonPath('data.token_type', 'Bearer')
             ->assertJsonStructure(['data' => ['token']]);
     }

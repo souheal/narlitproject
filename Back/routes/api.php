@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\OrganizationReviewController;
+use App\Http\Controllers\Api\Auth\ForgotPasswordController;
 use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Auth\OtpVerificationController;
 use App\Http\Controllers\Api\Auth\OrganizationRegistrationController;
@@ -18,6 +19,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/verify-otp', [OtpVerificationController::class, 'verify'])->middleware('throttle:auth.otp.verify');
         Route::post('/resend-otp', [OtpVerificationController::class, 'resend'])->middleware('throttle:auth.otp.resend');
         Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:auth.login');
+        Route::post('/forgot-password', [ForgotPasswordController::class, 'sendOtp'])->middleware('throttle:auth.password.forgot');
+        Route::post('/verify-reset-otp', [ForgotPasswordController::class, 'verifyOtp'])->middleware('throttle:auth.password.verify');
+        Route::post('/reset-password', [ForgotPasswordController::class, 'resetPassword'])->middleware('throttle:auth.password.reset');
         Route::post('/verify-phone-mfa', [PhoneMfaController::class, 'verify'])->middleware('throttle:auth.phone_mfa.verify');
         Route::post('/resend-phone-mfa', [PhoneMfaController::class, 'resend'])->middleware('throttle:auth.phone_mfa.resend');
 

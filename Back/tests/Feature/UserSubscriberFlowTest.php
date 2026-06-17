@@ -92,6 +92,7 @@ class UserSubscriberFlowTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.next_step', 'completed')
+            ->assertJsonPath('data.user.username', 'muhannad')
             ->assertJsonPath('data.token_type', 'Bearer')
             ->assertJsonStructure(['data' => ['token']]);
 
@@ -103,6 +104,7 @@ class UserSubscriberFlowTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.next_step', 'completed')
+            ->assertJsonPath('data.user.username', 'muhannad')
             ->assertJsonPath('data.token_type', 'Bearer')
             ->assertJsonStructure(['data' => ['token']]);
 

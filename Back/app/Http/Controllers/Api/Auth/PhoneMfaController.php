@@ -33,6 +33,7 @@ class PhoneMfaController extends Controller
             'user' => [
                 'public_id' => $result['user']->public_id,
                 'full_name' => $result['user']->full_name,
+                'username' => $result['user']->username,
                 'email' => $result['user']->email,
             ],
             'token' => $result['token'],

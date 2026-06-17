@@ -30,6 +30,9 @@ class User extends Authenticatable
         'phone_mfa_code',
         'phone_mfa_expires_at',
         'phone_mfa_verified_at',
+        'password_reset_otp_code',
+        'password_reset_otp_expires_at',
+        'password_reset_otp_verified_at',
         'first_login_mfa_completed_at',
         'failed_login_attempts',
         'locked_until',
@@ -42,6 +45,7 @@ class User extends Authenticatable
         'remember_token',
         'otp_code',
         'phone_mfa_code',
+        'password_reset_otp_code',
     ];
 
     protected function casts(): array
@@ -52,6 +56,8 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'phone_mfa_expires_at' => 'datetime',
             'phone_mfa_verified_at' => 'datetime',
+            'password_reset_otp_expires_at' => 'datetime',
+            'password_reset_otp_verified_at' => 'datetime',
             'first_login_mfa_completed_at' => 'datetime',
             'locked_until' => 'datetime',
             'last_login_at' => 'datetime',
