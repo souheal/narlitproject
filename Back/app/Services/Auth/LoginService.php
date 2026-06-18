@@ -52,12 +52,17 @@ class LoginService
             throw new ApiException('Please verify your email before continuing.', 403);
         }
 
-        if (! $user->is_active) {
-            throw new ApiException('Please complete your subscription before logging in.', 403);
-        }
+        $roleName = \Illuminate\Support\Facades\DB::table('roles')->where('id', $user->role_id)->value('name');
+        $isAdmin  = $roleName === 'admin';
 
-        if (! $this->subscriptionService->userHasRequiredAccess($user)) {
-            throw new ApiException('Please complete your subscription before logging in.', 403);
+        if (! $isAdmin) {
+            if (! $user->is_active) {
+                throw new ApiException('Please complete your subscription before logging in.', 403);
+            }
+
+            if (! $this->subscriptionService->userHasRequiredAccess($user)) {
+                throw new ApiException('Please complete your subscription before logging in.', 403);
+            }
         }
 
         RateLimiter::clear($limiterKey);

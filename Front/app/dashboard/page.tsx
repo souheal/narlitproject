@@ -1,17 +1,39 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { clearToken } from "@/lib/auth";
+import { apiFetch, validateSession } from "@/lib/api";
 
 export default function DashboardPage() {
+  const [checking, setChecking] = useState(true);
+
   useEffect(() => {
-    if (!localStorage.getItem("auth_token")) {
-      window.location.href = "/login";
-    }
+    validateSession().then((valid) => {
+      if (!valid) {
+        clearToken();
+        window.location.href = "/login";
+      } else {
+        setChecking(false);
+      }
+    });
   }, []);
 
-  function handleLogout() {
-    localStorage.removeItem("auth_token");
+  async function handleLogout() {
+    try {
+      await apiFetch("/auth/logout", { method: "POST" });
+    } catch {
+      // token already invalid — still clear and redirect
+    }
+    clearToken();
     window.location.href = "/login";
+  }
+
+  if (checking) {
+    return (
+      <main className="state-shell">
+        <p style={{ color: "var(--muted)", fontWeight: 600 }}>Verifying session…</p>
+      </main>
+    );
   }
 
   return (

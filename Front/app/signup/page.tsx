@@ -88,7 +88,7 @@ export default function SignupPage() {
         const res = await fetch(`${API_BASE_URL}/billing/checkout`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ email: form.email }),
+          body: JSON.stringify({ email: form.email, subscription_plan: form.subscription_plan }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(readError(data));

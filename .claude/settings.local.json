@@ -5,7 +5,16 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git branch *)",
-      "Bash(git remote *)"
+      "Bash(git remote *)",
+      "Bash(git rm *)",
+      "Bash(rm -rf Front/.git)",
+      "Bash(git push *)",
+      "Bash(xargs grep *)",
+      "Bash(xargs cat *)",
+      "Bash(php --version)",
+      "Bash(php artisan *)",
+      "Bash(composer install *)",
+      "Bash(cat *)"
     ]
   }
 }
