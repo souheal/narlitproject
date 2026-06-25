@@ -47,6 +47,14 @@ return [
         'currency' => 'USD',
     ],
 
+    'impact' => [
+        'amount_per_completed_read' => (float) env('IMPACT_AMOUNT_PER_COMPLETED_READ', 0.07),
+        'completed_read_percent' => (int) env('IMPACT_COMPLETED_READ_PERCENT', 80),
+        'nonprofit_share_percent' => (int) env('IMPACT_NONPROFIT_SHARE_PERCENT', 33),
+        'operations_share_percent' => (int) env('IMPACT_OPERATIONS_SHARE_PERCENT', 33),
+        'growth_share_percent' => (int) env('IMPACT_GROWTH_SHARE_PERCENT', 34),
+    ],
+
     'irs' => [
         'verification_mode' => env('IRS_VERIFICATION_MODE', 'imported'),
         'dataset_path' => env('IRS_DATASET_PATH'),

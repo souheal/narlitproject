@@ -74,4 +74,19 @@ class User extends Authenticatable
     {
         return $this->hasOne(OrganizationProfile::class);
     }
+
+    public function articleReads(): HasMany
+    {
+        return $this->hasMany(ArticleRead::class);
+    }
+
+    public function impactTransactions(): HasMany
+    {
+        return $this->hasMany(ImpactTransaction::class);
+    }
+
+    public function impactWallet(): HasOne
+    {
+        return $this->hasOne(ImpactWallet::class);
+    }
 }

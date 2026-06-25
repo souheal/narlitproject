@@ -50,4 +50,14 @@ class OrganizationProfile extends Model
     {
         return $this->hasMany(OrganizationDocument::class);
     }
+
+    public function articles(): HasMany
+    {
+        return $this->hasMany(Article::class);
+    }
+
+    public function impactTransactions(): HasMany
+    {
+        return $this->hasMany(ImpactTransaction::class);
+    }
 }

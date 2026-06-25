@@ -9,6 +9,8 @@ use App\Http\Controllers\Api\Auth\PhoneMfaController;
 use App\Http\Controllers\Api\Auth\RegistrationController;
 use App\Http\Controllers\Api\Billing\StripeCheckoutController;
 use App\Http\Controllers\Api\Billing\StripeWebhookController;
+use App\Http\Controllers\Api\Member\MemberArticleController;
+use App\Http\Controllers\Api\Member\MemberDashboardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -39,6 +41,12 @@ Route::prefix('v1')->group(function () {
 
     Route::post('/billing/checkout', [StripeCheckoutController::class, 'store'])->middleware('throttle:billing.checkout');
     Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->middleware('throttle:billing.webhook');
+
+    Route::middleware(['auth:sanctum', 'narlit.user.access'])->prefix('member')->group(function () {
+        Route::get('/dashboard', [MemberDashboardController::class, 'show']);
+        Route::get('/articles', [MemberArticleController::class, 'index']);
+        Route::post('/articles/{publicId}/read', [MemberArticleController::class, 'markRead']);
+    });
 
     Route::middleware(['auth:sanctum', 'narlit.admin'])->prefix('admin')->group(function () {
         Route::get('/organizations', [OrganizationReviewController::class, 'index']);
