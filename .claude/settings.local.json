@@ -14,7 +14,11 @@
       "Bash(php --version)",
       "Bash(php artisan *)",
       "Bash(composer install *)",
-      "Bash(cat *)"
+      "Bash(cat *)",
+      "Bash(xargs basename *)",
+      "Bash(powershell *)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT_CODE=$?\")"
     ]
   }
 }

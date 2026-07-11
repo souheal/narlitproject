@@ -51,6 +51,21 @@ export default function OrganizerSignupPage() {
   function oField(key: keyof typeof initialOrg) {
     return (v: string) => setOrg((f) => ({ ...f, [key]: v }));
   }
+  function handleTaxId(raw: string) {
+    const digits = raw.replace(/\D/g, "").slice(0, 9);
+    const formatted = digits.length > 2 ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
+    setOrg((f) => ({ ...f, tax_id: formatted }));
+  }
+  function handleLandline(raw: string) {
+    let digits = raw.replace(/\D/g, "");
+    if (digits.startsWith("1")) digits = digits.slice(1);
+    digits = digits.slice(0, 10);
+    if (digits.length === 0) { setOrg((f) => ({ ...f, landline: "+1" })); return; }
+    let formatted = "+1 (" + digits.slice(0, 3);
+    if (digits.length > 3) formatted += ") " + digits.slice(3, 6);
+    if (digits.length > 6) formatted += "-" + digits.slice(6, 10);
+    setOrg((f) => ({ ...f, landline: formatted }));
+  }
   function reset() { setErrorMsg(""); setStatusMsg(""); }
 
   function handlePersonalSubmit(e: FormEvent<HTMLFormElement>) {
@@ -215,9 +230,9 @@ export default function OrganizerSignupPage() {
             </div>
             <div className="su-grid" suppressHydrationWarning>
               <Field label="Organization name" value={org.organization_name} onChange={oField("organization_name")} required />
-              <Field label="Tax ID"            value={org.tax_id}            onChange={oField("tax_id")}  placeholder="12-3456789" required />
+              <Field label="Tax ID"            value={org.tax_id}            onChange={handleTaxId}       placeholder="12-3456789" required inputMode="numeric" />
               <Field label="Website"           type="url" value={org.website} onChange={oField("website")} placeholder="https://yourorg.com" />
-              <Field label="Landline"          value={org.landline}          onChange={oField("landline")} placeholder="+1 555 000 0000" />
+              <Field label="Phone Number"      value={org.landline}          onChange={handleLandline}     placeholder="+1 (555) 000-0000" inputMode="numeric" />
             </div>
             <div className="su-actions" suppressHydrationWarning>
               <button type="button" className="narlit-button narlit-button-secondary"
