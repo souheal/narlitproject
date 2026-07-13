@@ -77,5 +77,13 @@ class FortifyServiceProvider extends ServiceProvider
         RateLimiter::for('billing.webhook', fn (Request $request) => [
             Limit::perMinute(120)->by($request->ip()),
         ]);
+
+        RateLimiter::for('admin.users.password_reset', fn (Request $request) => [
+            Limit::perMinutes(10, 5)->by(($request->user()?->id ?? 'guest').'|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('admin.users.reset_mfa', fn (Request $request) => [
+            Limit::perMinutes(10, 5)->by(($request->user()?->id ?? 'guest').'|'.$request->ip()),
+        ]);
     }
 }
