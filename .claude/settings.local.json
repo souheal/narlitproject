@@ -18,7 +18,8 @@
       "Bash(xargs basename *)",
       "Bash(powershell *)",
       "Bash(npx tsc *)",
-      "Bash(echo \"EXIT_CODE=$?\")"
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(echo \"EXIT=$?\")"
     ]
   }
 }

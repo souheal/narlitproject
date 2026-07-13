@@ -1,21 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
 
-interface User { full_name: string; email: string }
-
-interface Article {
+interface OrgArticle {
   public_id: string;
   title: string;
   excerpt: string | null;
   category: string | null;
-  organization: { public_id: string | null; name: string | null };
+  status: string;
+  published_at: string | null;
   read_time_minutes: number | null;
-  is_read: boolean;
-  cta_label: string;
+  total_reads: number;
+  total_unique_reads: number;
+  total_points_generated: number;
 }
 
 interface Pagination {
@@ -24,28 +23,42 @@ interface Pagination {
   total: number;
 }
 
-export default function ArticlesPage() {
-  const [articles, setArticles] = useState<Article[]>([]);
+const STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
+  pending_review: "Pending review",
+  approved: "Approved",
+  rejected: "Rejected",
+  published: "Published",
+  archived: "Archived",
+};
+
+export default function OrgArticlesPage() {
+  const [articles, setArticles] = useState<OrgArticle[]>([]);
   const [meta, setMeta] = useState<Pagination | null>(null);
   const [page, setPage] = useState(1);
   const [checking, setChecking] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [error, setError] = useState("");
 
-  async function loadArticles(targetPage: number) {
+  async function loadArticles(target: number) {
     setLoading(true);
+    setError("");
     try {
-      const res = await apiFetch(`/member/articles?per_page=10&page=${targetPage}`);
+      const res = await apiFetch(`/organization/articles?per_page=10&page=${target}`);
       const data = await res.json();
+      if (!res.ok) {
+        setError(data?.message ?? "Failed to load articles.");
+        return;
+      }
       const payload = data.data?.articles;
       setArticles(payload?.data ?? []);
       setMeta({
-        current_page: payload?.current_page ?? targetPage,
+        current_page: payload?.current_page ?? target,
         last_page: payload?.last_page ?? 1,
         total: payload?.total ?? 0,
       });
     } catch {
-      /* ignore */
+      setError("Failed to load articles.");
     } finally {
       setLoading(false);
     }
@@ -58,11 +71,6 @@ export default function ArticlesPage() {
         window.location.href = "/login";
         return;
       }
-      try {
-        const meRes = await apiFetch("/auth/me");
-        const meData = await meRes.json();
-        setUser(meData.data?.user ?? meData.data ?? null);
-      } catch { /* ignore */ }
       await loadArticles(1);
       setChecking(false);
     });
@@ -85,43 +93,60 @@ export default function ArticlesPage() {
     );
   }
 
-  const initials = user?.full_name?.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase() ?? "NL";
-
   return (
     <div className="hm-shell" suppressHydrationWarning>
-      <MemberNav initials={initials} name={user?.full_name} email={user?.email} />
+      <nav className="hm-nav">
+        <div className="hm-nav-inner">
+          <a href="/organization/dashboard" className="hm-nav-brand">
+            <span className="hm-nav-mark">
+              <span className="hm-nm-orange" />
+              <span className="hm-nm-teal" />
+            </span>
+            <span className="hm-nav-wordmark">NarLit · Org</span>
+          </a>
+          <div className="hm-nav-links">
+            <a href="/organization/dashboard" className="hm-nav-link">Overview</a>
+            <a href="/organization/articles" className="hm-nav-link hm-nav-link-active">Articles</a>
+            <a href="/organization/payouts" className="hm-nav-link">Payouts</a>
+          </div>
+          <div className="hm-nav-user" />
+        </div>
+      </nav>
 
       <main className="hm-main">
         <section className="hm-section">
           <div className="hm-section-header">
-            <h2 className="hm-section-title">All Stories</h2>
-            {meta && <span className="hm-article-time">{meta.total} total</span>}
+            <h2 className="hm-section-title">Your Articles</h2>
+            <a href="/organization/articles/new" className="hm-article-btn" style={{ display: "inline-block" }}>
+              + New article
+            </a>
           </div>
 
-          {loading && articles.length === 0 && (
-            <p className="hm-empty">Loading stories…</p>
-          )}
+          {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
 
-          {!loading && articles.length === 0 && (
-            <p className="hm-empty">No stories available yet.</p>
+          {loading && articles.length === 0 && <p className="hm-empty">Loading…</p>}
+          {!loading && articles.length === 0 && !error && (
+            <p className="hm-empty">
+              You haven&apos;t submitted any articles yet.{" "}
+              <a href="/organization/articles/new" className="su-link">Submit your first one</a>.
+            </p>
           )}
 
           <div className="hm-articles">
             {articles.map((a) => (
-              <article key={a.public_id} className={`hm-article-card${a.is_read ? " hm-article-read" : ""}`}>
+              <article key={a.public_id} className="hm-article-card">
                 <div className="hm-article-top">
-                  <span className="hm-article-org">{a.organization.name ?? "NarLit"}</span>
+                  <span className="hm-article-org">{STATUS_LABEL[a.status] ?? a.status}</span>
                   {a.category && <span className="hm-article-cat">{a.category}</span>}
-                  {a.is_read && <span className="hm-article-done">✓ Read</span>}
                 </div>
                 <h3 className="hm-article-title">{a.title}</h3>
                 <p className="hm-article-excerpt">{a.excerpt}</p>
                 <div className="hm-article-footer">
                   <span className="hm-article-time">
-                    {a.read_time_minutes ? `${a.read_time_minutes} min read` : "Quick read"}
+                    {a.total_reads} reads · {a.total_unique_reads} unique
                   </span>
-                  <a href={`/articles/${a.public_id}`} className="hm-article-btn">
-                    {a.cta_label}
+                  <a href={`/organization/articles/${a.public_id}`} className="hm-article-btn">
+                    Manage →
                   </a>
                 </div>
               </article>

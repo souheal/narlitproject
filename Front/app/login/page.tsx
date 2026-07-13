@@ -53,17 +53,20 @@ export default function LoginPage() {
 
         if (payload?.data?.token) {
           const token = payload.data.token;
+          const authHeaders = { Authorization: `Bearer ${token}`, Accept: "application/json" };
 
-          // Check if admin
-          const adminCheck = await fetch(`${API_BASE_URL}/admin/organizations?per_page=1`, {
-            headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          });
-
+          const adminCheck = await fetch(`${API_BASE_URL}/admin/organizations?per_page=1`, { headers: authHeaders });
           if (adminCheck.ok) {
             saveAdminToken(token);
             window.location.href = "/admin/dashboard";
+            return;
+          }
+
+          const orgCheck = await fetch(`${API_BASE_URL}/organization/dashboard`, { headers: authHeaders });
+          saveToken(token);
+          if (orgCheck.ok) {
+            window.location.href = "/organization/dashboard";
           } else {
-            saveToken(token);
             window.location.href = "/dashboard";
           }
         }

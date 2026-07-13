@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
 
@@ -64,8 +65,6 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [checking, setChecking] = useState(true);
-  const [navOpen, setNavOpen] = useState(false);
-  const [markingId, setMarkingId] = useState<string | null>(null);
 
   async function loadDashboard() {
     try {
@@ -100,28 +99,6 @@ export default function DashboardPage() {
     });
   }, []);
 
-  async function handleLogout() {
-    try { await apiFetch("/auth/logout", { method: "POST" }); } catch { /* noop */ }
-    clearToken();
-    window.location.href = "/login";
-  }
-
-  async function handleReadStory(story: Story) {
-    if (markingId) return;
-    setMarkingId(story.public_id);
-    try {
-      await apiFetch(`/member/articles/${story.public_id}/read`, {
-        method: "POST",
-        body: JSON.stringify({ read_percent: 100 }),
-      });
-      await loadDashboard();
-    } catch {
-      /* ignore — button just won't update */
-    } finally {
-      setMarkingId(null);
-    }
-  }
-
   const firstName =
     dashboard?.member?.name?.split(" ")[0] ??
     user?.full_name?.split(" ")[0] ??
@@ -155,41 +132,8 @@ export default function DashboardPage() {
 
   return (
     <div className="hm-shell" suppressHydrationWarning>
-      {/* ── Navbar ── */}
-      <nav className="hm-nav">
-        <div className="hm-nav-inner">
-          {/* Brand */}
-          <a href="/dashboard" className="hm-nav-brand">
-            <span className="hm-nav-mark">
-              <span className="hm-nm-orange" />
-              <span className="hm-nm-teal" />
-            </span>
-            <span className="hm-nav-wordmark">NarLit</span>
-          </a>
+      <MemberNav initials={initials} name={displayName} email={user?.email} />
 
-          {/* Desktop links */}
-          <div className="hm-nav-links">
-            <a href="/dashboard" className="hm-nav-link hm-nav-link-active">Home</a>
-            <a href="/articles" className="hm-nav-link">Explore</a>
-            <a href="#" className="hm-nav-link">My Impact</a>
-          </div>
-
-          {/* User menu */}
-          <div className="hm-nav-user">
-            <div className="hm-nav-avatar" onClick={() => setNavOpen(!navOpen)}>{initials}</div>
-            {navOpen && (
-              <div className="hm-nav-dropdown">
-                <div className="hm-nav-dd-name">{displayName}</div>
-                <div className="hm-nav-dd-email">{user?.email ?? ""}</div>
-                <div className="hm-nav-dd-divider" />
-                <button className="hm-nav-dd-item" onClick={handleLogout}>Sign out</button>
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
-
-      {/* ── Main ── */}
       <main className="hm-main">
 
         {/* ── Welcome Banner ── */}
@@ -273,14 +217,9 @@ export default function DashboardPage() {
                     <span className="hm-article-time">
                       {a.read_time_minutes ? `${a.read_time_minutes} min read` : "Quick read"}
                     </span>
-                    <button
-                      type="button"
-                      className="hm-article-btn"
-                      onClick={() => handleReadStory(a)}
-                      disabled={markingId === a.public_id}
-                    >
-                      {markingId === a.public_id ? "Saving…" : a.cta_label}
-                    </button>
+                    <a href={`/articles/${a.public_id}`} className="hm-article-btn">
+                      {a.cta_label}
+                    </a>
                   </div>
                 </article>
               ))}
