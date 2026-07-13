@@ -10,6 +10,7 @@ use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class OrganizationReviewController extends Controller
 {
@@ -61,6 +62,8 @@ class OrganizationReviewController extends Controller
             $profile->user->forceFill([
                 'is_active' => true,
             ])->save();
+
+            $this->log($request, $profile, 'organization.approved');
         }, 3);
 
         return $this->success('Organization approved successfully.', [
@@ -83,6 +86,10 @@ class OrganizationReviewController extends Controller
             $profile->user->forceFill([
                 'is_active' => false,
             ])->save();
+
+            $this->log($request, $profile, 'organization.rejected', [
+                'reason' => $request->validated('reason'),
+            ]);
         }, 3);
 
         return $this->success('Organization rejected successfully.', [
@@ -115,5 +122,23 @@ class OrganizationReviewController extends Controller
             'reviewed_at' => $profile->reviewed_at?->toIso8601String(),
             'rejection_reason' => $profile->rejection_reason,
         ];
+    }
+
+    protected function log(Request $request, OrganizationProfile $profile, string $action, array $metadata = []): void
+    {
+        if (! Schema::hasTable('admin_logs')) {
+            return;
+        }
+
+        DB::table('admin_logs')->insert([
+            'admin_id' => $request->user()->id,
+            'action' => $action,
+            'entity_type' => 'organization_profile',
+            'entity_id' => $profile->public_id,
+            'ip_address' => $request->ip(),
+            'user_agent' => (string) $request->userAgent(),
+            'metadata' => $metadata === [] ? null : json_encode($metadata),
+            'created_at' => now(),
+        ]);
     }
 }

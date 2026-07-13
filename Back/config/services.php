@@ -40,6 +40,7 @@ return [
         'secret' => env('STRIPE_SECRET'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
         'fake_checkout' => (bool) env('STRIPE_FAKE_CHECKOUT', false),
+        'transfers_enabled' => (bool) env('STRIPE_ENABLE_TRANSFERS', false),
         'success_url' => env('STRIPE_CHECKOUT_SUCCESS_URL', env('APP_URL').'/billing/success'),
         'cancel_url' => env('STRIPE_CHECKOUT_CANCEL_URL', env('APP_URL').'/billing/cancel'),
         'monthly_amount' => 700,
