@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\OrganizationProfile;
 use App\Models\IrsExemptOrganization;
+use App\Models\OrganizationProfile;
 use App\Models\User;
 use App\Services\Auth\OtpService;
 use App\Services\Auth\PhoneMfaService;
@@ -439,6 +439,7 @@ class OrganizationRegistrationFlowTest extends TestCase
             'phone' => '09376635272',
             'password' => 'Password123!',
             'email_verified_at' => now(),
+            'first_login_mfa_completed_at' => now(),
             'is_active' => true,
             'failed_login_attempts' => 0,
         ]);

@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Billing\StripeCheckoutController;
 use App\Http\Controllers\Api\Billing\StripeWebhookController;
 use App\Http\Controllers\Api\Member\MemberArticleController;
 use App\Http\Controllers\Api\Member\MemberDashboardController;
+use App\Http\Controllers\Api\SubscriptionPlanController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -49,6 +50,7 @@ Route::prefix('v1')->group(function () {
 
     Route::post('/billing/checkout', [StripeCheckoutController::class, 'store'])->middleware('throttle:billing.checkout');
     Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->middleware('throttle:billing.webhook');
+    Route::get('/subscription/plans', [SubscriptionPlanController::class, 'index']);
 
     Route::middleware(['auth:sanctum', 'narlit.user.access'])->prefix('member')->group(function () {
         Route::get('/dashboard', [MemberDashboardController::class, 'show']);
@@ -65,12 +67,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/analytics/categories', [AdminAnalyticsController::class, 'categories']);
         Route::get('/analytics/funnel', [AdminAnalyticsController::class, 'funnel']);
         Route::get('/analytics/cohorts', [AdminAnalyticsController::class, 'cohorts']);
-        Route::get('/audit-logs/export', [AdminAuditLogController::class, 'export']);
+        Route::get('/audit-logs/export', [AdminAuditLogController::class, 'export'])->middleware('throttle:admin.audit.export');
         Route::get('/audit-logs', [AdminAuditLogController::class, 'index']);
         Route::get('/audit-logs/{id}', [AdminAuditLogController::class, 'show']);
         Route::get('/settings', [AdminPlatformSettingsController::class, 'index']);
         Route::get('/settings/{group}', [AdminPlatformSettingsController::class, 'show']);
-        Route::put('/settings/{group}', [AdminPlatformSettingsController::class, 'update']);
+        Route::put('/settings/{group}', [AdminPlatformSettingsController::class, 'update'])->middleware('throttle:admin.sensitive');
         Route::get('/articles', [AdminArticleModerationController::class, 'index']);
         Route::get('/articles/{publicId}', [AdminArticleModerationController::class, 'show']);
         Route::post('/articles/{publicId}/approve', [AdminArticleModerationController::class, 'approve']);
@@ -84,15 +86,15 @@ Route::prefix('v1')->group(function () {
         Route::get('/subscriptions/summary', [AdminSubscriptionRevenueController::class, 'summary']);
         Route::get('/subscriptions', [AdminSubscriptionRevenueController::class, 'index']);
         Route::get('/subscriptions/{publicId}', [AdminSubscriptionRevenueController::class, 'show']);
-        Route::post('/subscriptions/{publicId}/cancel', [AdminSubscriptionRevenueController::class, 'cancel']);
-        Route::post('/payments/{publicId}/refund', [AdminSubscriptionRevenueController::class, 'refund']);
+        Route::post('/subscriptions/{publicId}/cancel', [AdminSubscriptionRevenueController::class, 'cancel'])->middleware('throttle:admin.sensitive');
+        Route::post('/payments/{publicId}/refund', [AdminSubscriptionRevenueController::class, 'refund'])->middleware('throttle:admin.sensitive');
         Route::get('/payouts/summary', [AdminPayoutController::class, 'summary']);
         Route::get('/payouts', [AdminPayoutController::class, 'index']);
-        Route::post('/payouts/generate', [AdminPayoutController::class, 'generate']);
+        Route::post('/payouts/generate', [AdminPayoutController::class, 'generate'])->middleware('throttle:admin.sensitive');
         Route::get('/payouts/{publicId}', [AdminPayoutController::class, 'show']);
-        Route::post('/payouts/{publicId}/execute', [AdminPayoutController::class, 'execute']);
-        Route::post('/payout-items/{id}/retry', [AdminPayoutController::class, 'retryItem']);
-        Route::post('/payouts/{publicId}/cancel', [AdminPayoutController::class, 'cancel']);
+        Route::post('/payouts/{publicId}/execute', [AdminPayoutController::class, 'execute'])->middleware('throttle:admin.sensitive');
+        Route::post('/payout-items/{id}/retry', [AdminPayoutController::class, 'retryItem'])->middleware('throttle:admin.sensitive');
+        Route::post('/payouts/{publicId}/cancel', [AdminPayoutController::class, 'cancel'])->middleware('throttle:admin.sensitive');
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::get('/users/{publicId}', [AdminUserController::class, 'show']);
         Route::patch('/users/{publicId}/status', [AdminUserController::class, 'updateStatus']);

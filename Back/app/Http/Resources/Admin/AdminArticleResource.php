@@ -31,7 +31,11 @@ class AdminArticleResource extends JsonResource
             'published_at' => $article->published_at?->toIso8601String(),
             'total_reads' => (int) $article->total_reads,
             'featured' => $article->featured_at !== null,
+            'is_featured' => $article->featured_at !== null,
             'featured_at' => $article->featured_at?->toIso8601String(),
+            'read_time_minutes' => $article->estimatedReadTimeMinutes(),
+            'total_unique_reads' => (int) ($article->total_unique_reads ?? 0),
+            'total_points_generated' => (int) ($article->total_points_generated ?? 0),
             'archived_at' => $article->deleted_at?->toIso8601String(),
         ];
     }

@@ -28,6 +28,10 @@ class EnsureAdminAccess
             throw new ApiException('Admin account is not active.', 403);
         }
 
+        if ($user->first_login_mfa_completed_at === null) {
+            throw new ApiException('Admin MFA verification is required.', 403);
+        }
+
         return $next($request);
     }
 }

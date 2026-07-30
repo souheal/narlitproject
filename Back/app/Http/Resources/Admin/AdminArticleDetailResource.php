@@ -20,6 +20,7 @@ class AdminArticleDetailResource extends JsonResource
             'title' => $article->title,
             'excerpt' => $article->excerpt,
             'content' => $article->content,
+            'body' => $article->content,
             'category' => $article->category,
             'status' => $article->trashed() ? 'archived' : $article->status,
             'rejection_reason' => $article->rejection_reason,

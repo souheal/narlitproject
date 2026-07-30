@@ -73,16 +73,16 @@ class AdminAuditLogService
                     foreach ($logs as $log) {
                         fputcsv($handle, [
                             $log->id,
-                            $log->created_at,
-                            $log->admin_name,
-                            $log->admin_email,
-                            $log->action,
-                            $log->entity_type,
-                            $log->entity_id,
-                            $log->ip_address,
-                            $log->user_agent,
-                            $this->status($log),
-                            json_encode($this->redact($this->decodeMetadata($log->metadata))),
+                            $this->csvValue($log->created_at),
+                            $this->csvValue($log->admin_name),
+                            $this->csvValue($log->admin_email),
+                            $this->csvValue($log->action),
+                            $this->csvValue($log->entity_type),
+                            $this->csvValue($log->entity_id),
+                            $this->csvValue($log->ip_address),
+                            $this->csvValue($log->user_agent),
+                            $this->csvValue($this->status($log)),
+                            $this->csvValue(json_encode($this->redact($this->decodeMetadata($log->metadata)))),
                         ]);
                     }
                 });
@@ -241,5 +241,16 @@ class AdminAuditLogService
         }
 
         return false;
+    }
+
+    protected function csvValue(mixed $value): string
+    {
+        $string = (string) $value;
+
+        if ($string !== '' && in_array($string[0], ['=', '+', '-', '@'], true)) {
+            return "'".$string;
+        }
+
+        return $string;
     }
 }

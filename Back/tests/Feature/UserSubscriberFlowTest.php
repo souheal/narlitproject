@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\Auth\OtpService;
 use App\Services\Auth\PhoneMfaService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -22,7 +23,23 @@ class UserSubscriberFlowTest extends TestCase
     public function test_user_signup_payment_first_login_phone_mfa_and_future_login_flow(): void
     {
         config()->set('services.stripe.fake_checkout', true);
-        config()->set('services.stripe.monthly_amount', 700);
+        DB::table('platform_settings')->insert([
+            'key' => 'subscription_plans.plans',
+            'value' => json_encode(['value' => [[
+                'key' => 'monthly',
+                'name' => 'Monthly',
+                'billing_interval' => 'monthly',
+                'display_price' => '7.00',
+                'stripe_price_id' => 'price_test_monthly',
+                'enabled' => true,
+                'founding_member_cap' => null,
+            ]]]),
+            'group' => 'subscription_plans',
+            'type' => 'array',
+            'is_public' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $registration = $this->postJson('/api/v1/auth/register', [
             'full_name' => 'Muhannad Test',
@@ -114,6 +131,7 @@ class UserSubscriberFlowTest extends TestCase
     private function createTestSchema(): void
     {
         Schema::dropIfExists('personal_access_tokens');
+        Schema::dropIfExists('platform_settings');
         Schema::dropIfExists('subscriptions');
         Schema::dropIfExists('users');
         Schema::dropIfExists('roles');
@@ -176,6 +194,17 @@ class UserSubscriberFlowTest extends TestCase
             $table->text('abilities')->nullable();
             $table->timestamp('last_used_at')->nullable();
             $table->timestamp('expires_at')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('platform_settings', function (Blueprint $table): void {
+            $table->id();
+            $table->string('key')->unique();
+            $table->json('value');
+            $table->string('group');
+            $table->string('type');
+            $table->boolean('is_public')->default(false);
+            $table->foreignId('updated_by')->nullable()->constrained('users');
             $table->timestamps();
         });
     }
