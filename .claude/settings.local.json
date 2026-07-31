@@ -19,7 +19,17 @@
       "Bash(powershell *)",
       "Bash(npx tsc *)",
       "Bash(echo \"EXIT_CODE=$?\")",
-      "Bash(echo \"EXIT=$?\")"
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(php -l app/Services/Admin/AdminDashboardService.php)",
+      "Bash(php -l app/Http/Controllers/Api/Admin/AdminDashboardController.php)",
+      "Bash(php -l routes/api.php)",
+      "Bash(git *)",
+      "Bash(php -l app/Models/User.php)",
+      "Bash(grep -r \"fetch\\\\|apiFetch\\\\|adminFetch\" \"C:/Users/Owner/Desktop/NarlitProject/Front/app\" --include=\"*.tsx\" --include=\"*.ts\" ! -path \"*/node_modules/*\")",
+      "Bash(grep -oE '\\(POST|GET|PUT|PATCH|DELETE\\)[\"\\\\`]?[ ]?[/a-zA-Z0-9_\\\\-{}\\\\$]+\" | sort | uniq)",
+      "Bash(npx --no-install tsc --noEmit)",
+      "Bash(php -l app/Http/Controllers/Api/Admin/AdminUserController.php app/Http/Controllers/Api/Admin/AdminAnalyticsController.php routes/api.php)",
+      "Bash(php -l app/Http/Controllers/Api/Admin/AdminAnalyticsController.php)"
     ]
   }
 }

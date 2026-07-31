@@ -180,10 +180,19 @@ class AdminAuditLogService
         }
 
         if ($request->filled('actor')) {
-            $query->where('users.public_id', $request->query('actor'));
+            $actor = (string) $request->query('actor');
+            $query->where(function (Builder $nested) use ($actor): void {
+                $nested->where('users.public_id', $actor)
+                    ->orWhere('users.email', 'like', "%{$actor}%")
+                    ->orWhere('users.full_name', 'like', "%{$actor}%");
+            });
         }
 
-        foreach (['action', 'entity_type', 'ip_address'] as $filter) {
+        if ($request->filled('action')) {
+            $query->where('admin_logs.action', 'like', '%'.$request->query('action').'%');
+        }
+
+        foreach (['entity_type', 'ip_address'] as $filter) {
             if ($request->filled($filter)) {
                 $query->where("admin_logs.{$filter}", $request->query($filter));
             }

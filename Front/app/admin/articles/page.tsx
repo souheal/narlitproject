@@ -121,6 +121,51 @@ export default function AdminArticlesPage() {
     });
   }
 
+  function requestChanges(a: AdminArticle) {
+    if (!rejectReason.trim()) {
+      setError("Please describe the changes needed.");
+      return;
+    }
+    setFeedback(""); setError("");
+    startTransition(async () => {
+      const res = await adminFetch(`/admin/articles/${a.public_id}/request-changes`, {
+        method: "POST",
+        body: JSON.stringify({ reason: rejectReason }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data?.message ?? "Failed to request changes."); return; }
+      setFeedback("Changes requested. Author has been notified.");
+      setReviewing(null);
+      setRejectReason("");
+      fetchArticles(meta.current_page);
+    });
+  }
+
+  function publish(a: AdminArticle) {
+    if (!confirm("Publish this article now?")) return;
+    setFeedback(""); setError("");
+    startTransition(async () => {
+      const res = await adminFetch(`/admin/articles/${a.public_id}/publish`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { setError(data?.message ?? "Failed to publish."); return; }
+      setFeedback("Article published.");
+      setReviewing(null);
+      fetchArticles(meta.current_page);
+    });
+  }
+
+  function restore(a: AdminArticle) {
+    if (!confirm("Restore this article? It will become visible to members again.")) return;
+    setFeedback(""); setError("");
+    startTransition(async () => {
+      const res = await adminFetch(`/admin/articles/${a.public_id}/restore`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { setError(data?.message ?? "Failed to restore."); return; }
+      setFeedback("Article restored.");
+      fetchArticles(meta.current_page);
+    });
+  }
+
   return (
     <div suppressHydrationWarning>
       <div className="admin-page-header">
@@ -206,6 +251,16 @@ export default function AdminArticlesPage() {
                           </button>
                         </>
                       )}
+                      {a.status === "draft" && (
+                        <button className="admin-btn admin-btn-approve" onClick={() => publish(a)} disabled={isPending}>
+                          Publish
+                        </button>
+                      )}
+                      {a.status === "archived" && (
+                        <button className="admin-btn admin-btn-approve" onClick={() => restore(a)} disabled={isPending}>
+                          Restore
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -253,7 +308,7 @@ export default function AdminArticlesPage() {
             {reviewing.status === "pending_review" && (
               <>
                 <label style={{ display: "block", marginBottom: 8, fontSize: "0.85rem" }}>
-                  Rejection reason (optional if approving):
+                  Reason (required for Reject and Request changes):
                 </label>
                 <textarea
                   value={rejectReason}
@@ -270,8 +325,11 @@ export default function AdminArticlesPage() {
                     fontFamily: "inherit",
                   }}
                 />
-                <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end", flexWrap: "wrap" }}>
                   <button className="admin-btn" onClick={() => { setReviewing(null); setRejectReason(""); }}>Cancel</button>
+                  <button className="admin-btn" onClick={() => requestChanges(reviewing)} disabled={isPending}>
+                    Request changes
+                  </button>
                   <button className="admin-btn admin-btn-reject" onClick={() => reject(reviewing)} disabled={isPending}>
                     Reject
                   </button>
@@ -282,7 +340,25 @@ export default function AdminArticlesPage() {
               </>
             )}
 
-            {reviewing.status !== "pending_review" && (
+            {reviewing.status === "draft" && (
+              <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+                <button className="admin-btn" onClick={() => setReviewing(null)}>Close</button>
+                <button className="admin-btn admin-btn-approve" onClick={() => publish(reviewing)} disabled={isPending}>
+                  Publish
+                </button>
+              </div>
+            )}
+
+            {reviewing.status === "archived" && (
+              <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+                <button className="admin-btn" onClick={() => setReviewing(null)}>Close</button>
+                <button className="admin-btn admin-btn-approve" onClick={() => restore(reviewing)} disabled={isPending}>
+                  Restore
+                </button>
+              </div>
+            )}
+
+            {(reviewing.status !== "pending_review" && reviewing.status !== "draft" && reviewing.status !== "archived") && (
               <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
                 <button className="admin-btn" onClick={() => setReviewing(null)}>Close</button>
               </div>

@@ -34,19 +34,121 @@ interface Analytics {
   retention_avg: number;
 }
 
-function LineChart({ points, color, height = 140 }: { points: { date: string; count?: number; amount?: number }[]; color: string; height?: number }) {
+function LineChart({
+  points,
+  color,
+  colorSoft,
+  height = 160,
+  gradientId,
+}: {
+  points: { date: string; count?: number; amount?: number }[];
+  color: string;
+  colorSoft: string;
+  height?: number;
+  gradientId: string;
+}) {
   const values = points.map((p) => (p.count ?? p.amount ?? 0));
-  if (values.length === 0) return <p className="admin-empty">No data.</p>;
+  if (values.length === 0 || values.every((v) => v === 0)) {
+    return (
+      <div className="admin-chart-empty" style={{ minHeight: height, marginTop: 4 }}>
+        <span className="admin-chart-empty-icon">📉</span>
+        <span className="admin-chart-empty-title">No data yet</span>
+        <span className="admin-chart-empty-hint">Data will appear here once activity is recorded in this range.</span>
+      </div>
+    );
+  }
   const max = Math.max(1, ...values);
   const w = 300, h = height;
   const step = w / Math.max(1, values.length - 1);
-  const path = values.map((v, i) => `${i === 0 ? "M" : "L"} ${(i * step).toFixed(2)},${(h - (v / max) * (h - 10)).toFixed(2)}`).join(" ");
+  const coords = values.map((v, i) => ({
+    x: i * step,
+    y: h - (v / max) * (h - 20) - 4,
+  }));
+  const path = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(2)},${c.y.toFixed(2)}`).join(" ");
   const areaPath = `${path} L ${w},${h} L 0,${h} Z`;
+  const peak = coords.reduce((best, c, i) => (values[i] > values[best.i] ? { i, c } : best), { i: 0, c: coords[0] });
+
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: "100%", height }}>
-      <path d={areaPath} fill={color} opacity={0.15} />
-      <path d={path} fill="none" stroke={color} strokeWidth="2" />
-    </svg>
+    <div className="admin-line-chart-wrap" style={{ height }}>
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: "100%", height }}>
+        <defs>
+          <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map((r) => (
+          <line key={r} x1="0" y1={h * r} x2={w} y2={h * r} stroke="rgba(5,46,53,0.05)" strokeWidth="1" />
+        ))}
+        <path d={areaPath} fill={`url(#${gradientId})`} />
+        <path d={path} fill="none" stroke={color} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={peak.c.x} cy={peak.c.y} r="3.5" fill={color} stroke="#fff" strokeWidth="1.5" />
+      </svg>
+    </div>
+  );
+}
+
+function sumOf(points: { count?: number; amount?: number }[]): number {
+  return points.reduce((sum, p) => sum + (p.count ?? p.amount ?? 0), 0);
+}
+
+function trendPct(points: { count?: number; amount?: number }[]): { pct: number; up: boolean } | null {
+  if (points.length < 4) return null;
+  const half = Math.floor(points.length / 2);
+  const first = points.slice(0, half).reduce((s, p) => s + (p.count ?? p.amount ?? 0), 0);
+  const second = points.slice(half).reduce((s, p) => s + (p.count ?? p.amount ?? 0), 0);
+  if (first === 0 && second === 0) return null;
+  if (first === 0) return { pct: 100, up: true };
+  const change = ((second - first) / first) * 100;
+  return { pct: Math.abs(change), up: change >= 0 };
+}
+
+function TimeseriesPanel({
+  title,
+  subtitle,
+  icon,
+  tone,
+  points,
+  color,
+  gradientId,
+  format,
+  statLabel,
+}: {
+  title: string;
+  subtitle: string;
+  icon: string;
+  tone: "orange" | "teal" | "purple" | "green";
+  points: { date: string; count?: number; amount?: number }[];
+  color: string;
+  gradientId: string;
+  format: (n: number) => string;
+  statLabel: string;
+}) {
+  const total = sumOf(points);
+  const trend = trendPct(points);
+  return (
+    <section className="admin-panel">
+      <header className="admin-panel-header">
+        <div className="admin-ts-heading">
+          <span className={`admin-ts-icon admin-ts-icon-${tone}`}>{icon}</span>
+          <div>
+            <h3 className="admin-panel-title">{title}</h3>
+            <p className="admin-panel-sub">{subtitle}</p>
+          </div>
+        </div>
+        <div className="admin-panel-stat">
+          <span className="admin-panel-stat-value" style={{ color }}>{format(total)}</span>
+          <span className="admin-panel-stat-label">
+            {trend ? (
+              <span className={`admin-ts-trend ${trend.up ? "admin-ts-trend-up" : "admin-ts-trend-down"}`}>
+                {trend.up ? "▲" : "▼"} {trend.pct.toFixed(0)}%
+              </span>
+            ) : statLabel}
+          </span>
+        </div>
+      </header>
+      <LineChart points={points} color={color} colorSoft={color} gradientId={gradientId} />
+    </section>
   );
 }
 
@@ -113,125 +215,301 @@ export default function AdminAnalyticsPage() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-            <div className="admin-table-wrap">
-              <h3 style={{ margin: "0 0 8px", fontSize: "1rem" }}>Signups over time</h3>
-              <LineChart points={data.timeseries.signups} color="var(--orange)" />
-            </div>
-            <div className="admin-table-wrap">
-              <h3 style={{ margin: "0 0 8px", fontSize: "1rem" }}>Reads over time</h3>
-              <LineChart points={data.timeseries.reads} color="var(--teal)" />
-            </div>
-            <div className="admin-table-wrap">
-              <h3 style={{ margin: "0 0 8px", fontSize: "1rem" }}>Activations over time</h3>
-              <LineChart points={data.timeseries.activations} color="#7c5cbf" />
-            </div>
-            <div className="admin-table-wrap">
-              <h3 style={{ margin: "0 0 8px", fontSize: "1rem" }}>Revenue over time</h3>
-              <LineChart points={data.timeseries.revenue} color="#4caf50" />
-            </div>
+          <div className="admin-dash-two-col" style={{ marginBottom: 20 }}>
+            <TimeseriesPanel
+              title="Signups over time"
+              subtitle={`New user registrations · ${range}`}
+              icon="👥"
+              tone="orange"
+              points={data.timeseries.signups}
+              color="var(--orange)"
+              gradientId="sig-grad"
+              format={(n) => n.toLocaleString()}
+              statLabel="total"
+            />
+            <TimeseriesPanel
+              title="Reads over time"
+              subtitle={`Article reads · ${range}`}
+              icon="📖"
+              tone="teal"
+              points={data.timeseries.reads}
+              color="var(--teal)"
+              gradientId="reads-grad"
+              format={(n) => n.toLocaleString()}
+              statLabel="total"
+            />
+            <TimeseriesPanel
+              title="Activations over time"
+              subtitle={`Users who completed onboarding · ${range}`}
+              icon="⚡"
+              tone="purple"
+              points={data.timeseries.activations}
+              color="#7c5cbf"
+              gradientId="act-grad"
+              format={(n) => n.toLocaleString()}
+              statLabel="activated"
+            />
+            <TimeseriesPanel
+              title="Revenue over time"
+              subtitle={`Gross revenue · ${range}`}
+              icon="💵"
+              tone="green"
+              points={data.timeseries.revenue}
+              color="#3fa650"
+              gradientId="rev-grad"
+              format={(n) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+              statLabel="earned"
+            />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-            <div className="admin-table-wrap">
-              <h3 style={{ margin: "0 0 8px", fontSize: "1rem" }}>Top organizations</h3>
-              <table className="admin-table">
-                <thead><tr><th>Organization</th><th>Reads</th><th>Earned</th></tr></thead>
-                <tbody>
-                  {data.top_organizations.length === 0 && <tr><td colSpan={3} className="admin-empty">No data.</td></tr>}
-                  {data.top_organizations.map((o) => (
-                    <tr key={o.public_id}>
-                      <td>{o.name}</td>
-                      <td>{o.reads}</td>
-                      <td>${o.earned}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="admin-table-wrap">
-              <h3 style={{ margin: "0 0 8px", fontSize: "1rem" }}>Top articles</h3>
-              <table className="admin-table">
-                <thead><tr><th>Article</th><th>Org</th><th>Reads</th></tr></thead>
-                <tbody>
-                  {data.top_articles.length === 0 && <tr><td colSpan={3} className="admin-empty">No data.</td></tr>}
-                  {data.top_articles.map((a) => (
-                    <tr key={a.public_id}>
-                      <td>{a.title}</td>
-                      <td style={{ fontSize: "0.75rem", color: "var(--muted)" }}>{a.organization}</td>
-                      <td>{a.reads}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-            <div className="admin-table-wrap">
-              <h3 style={{ margin: "0 0 12px", fontSize: "1rem" }}>Category breakdown</h3>
-              {data.categories.map((c) => (
-                <div key={c.category} style={{ marginBottom: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: 4 }}>
-                    <span>{c.category}</span>
-                    <span style={{ color: "var(--muted)" }}>{c.reads} · {c.percent}%</span>
-                  </div>
-                  <div style={{ height: 8, background: "var(--panel)", borderRadius: 4, overflow: "hidden" }}>
-                    <div style={{ width: `${c.percent}%`, height: "100%", background: "linear-gradient(90deg, var(--orange), var(--teal))" }} />
-                  </div>
+          <div className="admin-dash-two-col" style={{ marginBottom: 20 }}>
+            <section className="admin-panel">
+              <header className="admin-panel-header">
+                <div>
+                  <h3 className="admin-panel-title">Top organizations</h3>
+                  <p className="admin-panel-sub">Highest reads · gross earned</p>
                 </div>
-              ))}
-              {data.categories.length === 0 && <p className="admin-empty">No data.</p>}
-            </div>
-
-            <div className="admin-table-wrap">
-              <h3 style={{ margin: "0 0 12px", fontSize: "1rem" }}>Onboarding funnel</h3>
-              {data.funnel.map((s, i) => (
-                <div key={s.stage} style={{ marginBottom: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: 4 }}>
-                    <span>{i + 1}. {s.stage}</span>
-                    <span style={{ color: "var(--muted)" }}>{s.count} · {s.percent}%</span>
-                  </div>
-                  <div style={{ height: 22, background: "var(--panel)", borderRadius: 6, overflow: "hidden", position: "relative" }}>
-                    <div style={{ width: `${s.percent}%`, height: "100%", background: `hsl(${200 - i * 30}, 60%, 50%)` }} />
-                  </div>
+                <div className="admin-panel-stat">
+                  <span className="admin-panel-stat-value">{data.top_organizations.length}</span>
+                  <span className="admin-panel-stat-label">tracked</span>
                 </div>
-              ))}
-              {data.funnel.length === 0 && <p className="admin-empty">No data.</p>}
-            </div>
+              </header>
+
+              {data.top_organizations.length === 0 ? (
+                <div className="admin-chart-empty">
+                  <span className="admin-chart-empty-icon">🏢</span>
+                  <span className="admin-chart-empty-title">No organizations to rank</span>
+                  <span className="admin-chart-empty-hint">Rankings appear once orgs receive reads in this range.</span>
+                </div>
+              ) : (
+                <ul className="admin-rank-list">
+                  {data.top_organizations.map((o, i) => {
+                    const max = data.top_organizations[0]?.reads || 1;
+                    const share = Math.max(4, Math.round((o.reads / max) * 100));
+                    return (
+                      <li key={o.public_id} className="admin-rank-row">
+                        <span className={`admin-rank-medal admin-rank-medal-${i <= 2 ? i : "other"}`}>
+                          {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
+                        </span>
+                        <div className="admin-rank-info">
+                          <div className="admin-rank-info-top">
+                            <span className="admin-rank-name">{o.name}</span>
+                            <span className="admin-rank-earn">${o.earned}</span>
+                          </div>
+                          <div className="admin-rank-track">
+                            <div className="admin-rank-fill admin-rank-fill-teal" style={{ width: `${share}%` }} />
+                          </div>
+                          <span className="admin-rank-meta">{o.reads.toLocaleString()} reads</span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+            <section className="admin-panel">
+              <header className="admin-panel-header">
+                <div>
+                  <h3 className="admin-panel-title">Top articles</h3>
+                  <p className="admin-panel-sub">Most-read articles in this range</p>
+                </div>
+                <div className="admin-panel-stat">
+                  <span className="admin-panel-stat-value">{data.top_articles.length}</span>
+                  <span className="admin-panel-stat-label">tracked</span>
+                </div>
+              </header>
+
+              {data.top_articles.length === 0 ? (
+                <div className="admin-chart-empty">
+                  <span className="admin-chart-empty-icon">📰</span>
+                  <span className="admin-chart-empty-title">No articles to rank</span>
+                  <span className="admin-chart-empty-hint">Article rankings appear once reads are recorded.</span>
+                </div>
+              ) : (
+                <ul className="admin-rank-list">
+                  {data.top_articles.map((a, i) => {
+                    const max = data.top_articles[0]?.reads || 1;
+                    const share = Math.max(4, Math.round((a.reads / max) * 100));
+                    return (
+                      <li key={a.public_id} className="admin-rank-row">
+                        <span className={`admin-rank-medal admin-rank-medal-${i <= 2 ? i : "other"}`}>
+                          {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
+                        </span>
+                        <div className="admin-rank-info">
+                          <div className="admin-rank-info-top">
+                            <span className="admin-rank-name">{a.title}</span>
+                            <span className="admin-rank-earn">{a.reads.toLocaleString()}</span>
+                          </div>
+                          <div className="admin-rank-track">
+                            <div className="admin-rank-fill admin-rank-fill-orange" style={{ width: `${share}%` }} />
+                          </div>
+                          <span className="admin-rank-meta">{a.organization}</span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
           </div>
 
-          <div className="admin-table-wrap">
-            <h3 style={{ margin: "0 0 12px", fontSize: "1rem" }}>Cohort retention</h3>
-            {data.cohorts.length === 0 && <p className="admin-empty">No cohort data yet.</p>}
-            {data.cohorts.length > 0 && (
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Cohort</th>
-                    <th>Size</th>
-                    {data.cohorts[0].retained.map((_, i) => <th key={i}>M{i}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.cohorts.map((c) => (
-                    <tr key={c.cohort}>
-                      <td>{c.cohort}</td>
-                      <td>{c.total}</td>
-                      {c.retained.map((r, i) => {
-                        const pct = c.total > 0 ? Math.round((r / c.total) * 100) : 0;
-                        return (
-                          <td key={i} style={{ background: `rgba(17, 182, 200, ${pct / 100})`, textAlign: "center" }}>
-                            {pct}%
-                          </td>
-                        );
-                      })}
-                    </tr>
+          <div className="admin-dash-two-col" style={{ marginBottom: 20 }}>
+            <section className="admin-panel">
+              <header className="admin-panel-header">
+                <div>
+                  <h3 className="admin-panel-title">Category breakdown</h3>
+                  <p className="admin-panel-sub">Reads distribution by category</p>
+                </div>
+                <div className="admin-panel-stat">
+                  <span className="admin-panel-stat-value">
+                    {data.categories.reduce((sum, c) => sum + c.reads, 0).toLocaleString()}
+                  </span>
+                  <span className="admin-panel-stat-label">reads</span>
+                </div>
+              </header>
+
+              {data.categories.length === 0 ? (
+                <div className="admin-chart-empty">
+                  <span className="admin-chart-empty-icon">🏷️</span>
+                  <span className="admin-chart-empty-title">No category data</span>
+                  <span className="admin-chart-empty-hint">Category breakdown appears once articles get reads.</span>
+                </div>
+              ) : (
+                <ul className="admin-cat-list">
+                  {data.categories.map((c, i) => (
+                    <li key={c.category} className="admin-cat-row">
+                      <div className="admin-cat-header">
+                        <span className="admin-cat-name">
+                          <span className={`admin-cat-dot admin-cat-dot-${i % 4}`} />
+                          {c.category}
+                        </span>
+                        <span className="admin-cat-stats">
+                          <strong>{c.reads.toLocaleString()}</strong>
+                          <span>·</span>
+                          <span>{c.percent}%</span>
+                        </span>
+                      </div>
+                      <div className="admin-cat-track">
+                        <div className={`admin-cat-fill admin-cat-fill-${i % 4}`} style={{ width: `${Math.max(c.percent, 2)}%` }} />
+                      </div>
+                    </li>
                   ))}
-                </tbody>
-              </table>
+                </ul>
+              )}
+            </section>
+
+            <section className="admin-panel">
+              <header className="admin-panel-header">
+                <div>
+                  <h3 className="admin-panel-title">Onboarding funnel</h3>
+                  <p className="admin-panel-sub">Conversion from signup to first read</p>
+                </div>
+                <div className="admin-panel-stat">
+                  <span className="admin-panel-stat-value">
+                    {data.funnel.length > 0
+                      ? `${data.funnel[data.funnel.length - 1]?.percent ?? 0}%`
+                      : "—"}
+                  </span>
+                  <span className="admin-panel-stat-label">end-to-end</span>
+                </div>
+              </header>
+
+              {data.funnel.length === 0 ? (
+                <div className="admin-chart-empty">
+                  <span className="admin-chart-empty-icon">🚀</span>
+                  <span className="admin-chart-empty-title">No funnel data</span>
+                  <span className="admin-chart-empty-hint">Onboarding stages will populate once users sign up.</span>
+                </div>
+              ) : (
+                <ol className="admin-funnel-list">
+                  {data.funnel.map((s, i) => {
+                    const prev = i > 0 ? data.funnel[i - 1].percent : null;
+                    const drop = prev !== null && prev > 0 ? Math.max(0, prev - s.percent) : null;
+                    return (
+                      <li key={s.stage} className="admin-funnel-row">
+                        <div className="admin-funnel-header">
+                          <span className="admin-funnel-step">
+                            <span className="admin-funnel-num">{i + 1}</span>
+                            <span className="admin-funnel-stage">{s.stage}</span>
+                          </span>
+                          <span className="admin-funnel-stats">
+                            <strong>{s.count.toLocaleString()}</strong>
+                            <span className="admin-funnel-pct">{s.percent}%</span>
+                          </span>
+                        </div>
+                        <div className="admin-funnel-track">
+                          <div className="admin-funnel-fill" style={{ width: `${Math.max(s.percent, s.count > 0 ? 3 : 0)}%` }} />
+                        </div>
+                        {drop !== null && drop > 0 && (
+                          <span className="admin-funnel-drop">▼ {drop.toFixed(0)}% drop-off</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </section>
+          </div>
+
+          <section className="admin-panel" style={{ marginBottom: 20 }}>
+            <header className="admin-panel-header">
+              <div>
+                <h3 className="admin-panel-title">Cohort retention</h3>
+                <p className="admin-panel-sub">Users retained by month since signup</p>
+              </div>
+              <div className="admin-panel-stat">
+                <span className="admin-panel-stat-value">{data.retention_avg.toFixed(1)}%</span>
+                <span className="admin-panel-stat-label">avg retention</span>
+              </div>
+            </header>
+
+            {data.cohorts.length === 0 ? (
+              <div className="admin-chart-empty">
+                <span className="admin-chart-empty-icon">📅</span>
+                <span className="admin-chart-empty-title">No cohort data yet</span>
+                <span className="admin-chart-empty-hint">Cohort retention needs at least one month of signup history.</span>
+              </div>
+            ) : (
+              <div className="admin-cohort-scroll">
+                <table className="admin-cohort-table">
+                  <thead>
+                    <tr>
+                      <th>Cohort</th>
+                      <th>Size</th>
+                      {data.cohorts[0].retained.map((_, i) => <th key={i}>M{i}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.cohorts.map((c) => (
+                      <tr key={c.cohort}>
+                        <td className="admin-cohort-label">{c.cohort}</td>
+                        <td className="admin-cohort-size">{c.total.toLocaleString()}</td>
+                        {c.retained.map((r, i) => {
+                          const pct = c.total > 0 ? Math.round((r / c.total) * 100) : 0;
+                          const alpha = pct / 100;
+                          const isBright = alpha > 0.45;
+                          return (
+                            <td
+                              key={i}
+                              className="admin-cohort-cell"
+                              style={{
+                                background: `rgba(17, 182, 200, ${Math.max(alpha, 0.04)})`,
+                                color: isBright ? "#fff" : "var(--text)",
+                                fontWeight: isBright ? 800 : 700,
+                              }}
+                            >
+                              {pct}%
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </div>
+          </section>
         </>
       )}
     </div>

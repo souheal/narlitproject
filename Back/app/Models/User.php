@@ -22,6 +22,7 @@ class User extends Authenticatable
         'username',
         'email',
         'phone',
+        'country',
         'password',
         'otp_code',
         'otp_expires_at',
@@ -98,5 +99,30 @@ class User extends Authenticatable
     public function impactWallet(): HasOne
     {
         return $this->hasOne(ImpactWallet::class);
+    }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    public function bookmarks(): HasMany
+    {
+        return $this->hasMany(Bookmark::class);
+    }
+
+    public function preference(): HasOne
+    {
+        return $this->hasOne(UserPreference::class);
+    }
+
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(SupportTicket::class);
+    }
+
+    public function userAchievements(): HasMany
+    {
+        return $this->hasMany(UserAchievement::class);
     }
 }

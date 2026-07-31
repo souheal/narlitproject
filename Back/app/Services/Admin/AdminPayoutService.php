@@ -21,9 +21,35 @@ class AdminPayoutService
     public function summary(): array
     {
         $currentMonth = now()->startOfMonth();
+        $lastMonth = $currentMonth->copy()->subMonthNoOverflow();
         $preview = $this->calculate($currentMonth);
+        $currency = (string) config('services.stripe.currency', 'USD');
 
-        return [
+        $paidLastPeriod = (float) DB::table('payout_items')
+            ->join('payout_batches', 'payout_batches.id', '=', 'payout_items.payout_batch_id')
+            ->where('payout_items.transfer_status', 'succeeded')
+            ->whereDate('payout_batches.batch_month', $lastMonth)
+            ->sum('payout_items.payout_amount');
+        $organizationsReady = OrganizationProfile::query()
+            ->where('verification_status', 'approved')
+            ->whereNotNull('stripe_connect_account_id')
+            ->where('payouts_enabled', true)
+            ->count();
+        $organizationsMissing = OrganizationProfile::query()
+            ->where('verification_status', 'approved')
+            ->where(function (Builder $query): void {
+                $query->whereNull('stripe_connect_account_id')
+                    ->orWhere('payouts_enabled', false);
+            })
+            ->count();
+        $summary = [
+            'pending_this_period' => $this->money($preview['pool_cents']),
+            'paid_last_period' => number_format($paidLastPeriod, 2, '.', ''),
+            'next_period_starts' => $currentMonth->toDateString(),
+            'next_period_ends' => $currentMonth->copy()->endOfMonth()->toDateString(),
+            'currency' => $currency,
+            'organizations_ready' => $organizationsReady,
+            'organizations_missing_stripe' => $organizationsMissing,
             'current_payout_pool' => $this->money($preview['pool_cents']),
             'pending_payout_amount' => $this->sumItemsByStatuses(['pending']),
             'completed_payout_amount' => $this->sumItemsByStatuses(['completed']),
@@ -32,15 +58,11 @@ class AdminPayoutService
                 ->where('transfer_status', 'pending')
                 ->distinct('organization_profile_id')
                 ->count('organization_profile_id'),
-            'organizations_missing_stripe_connect_setup' => OrganizationProfile::query()
-                ->where('verification_status', 'approved')
-                ->where(function (Builder $query): void {
-                    $query->whereNull('stripe_connect_account_id')
-                        ->orWhere('payouts_enabled', false);
-                })
-                ->count(),
+            'organizations_missing_stripe_connect_setup' => $organizationsMissing,
             'formula' => $preview['formula'],
         ];
+
+        return ['summary' => $summary];
     }
 
     public function paginate(Request $request): LengthAwarePaginator

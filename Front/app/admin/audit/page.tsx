@@ -4,14 +4,20 @@ import React, { useEffect, useState } from "react";
 import { adminFetch } from "@/lib/api";
 
 interface AuditEntry {
+  id: number;
   public_id: string;
   actor: { name: string; email: string; role: string } | null;
   action: string;
+  entity_type: string | null;
+  entity_id: string | null;
   target_type: string | null;
   target_label: string | null;
   ip_address: string | null;
   user_agent: string | null;
+  device_summary: string | null;
+  status: string;
   metadata: Record<string, unknown> | null;
+  target_admin_path: string | null;
   created_at: string;
 }
 
@@ -41,7 +47,18 @@ export default function AdminAuditPage() {
   const [filterAction, setFilterAction] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [details, setDetails] = useState<AuditEntry | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  function buildQuery(): string {
+    const params = new URLSearchParams();
+    if (filterActor) params.set("actor", filterActor);
+    if (filterAction) params.set("action", filterAction);
+    return params.toString();
+  }
 
   async function fetchEntries(page = 1) {
     setLoading(true);
@@ -77,14 +94,62 @@ export default function AdminAuditPage() {
     fetchEntries(1);
   }
 
+  async function openDetails(entry: AuditEntry) {
+    setDetails(entry);
+    setLoadingDetails(true);
+    try {
+      const res = await adminFetch(`/admin/audit-logs/${entry.id}`);
+      const data = await res.json();
+      if (res.ok) {
+        setDetails(data.data?.audit_log ?? entry);
+      }
+    } catch { /* keep list-level data */ }
+    setLoadingDetails(false);
+  }
+
+  async function exportCsv() {
+    setExporting(true);
+    setError(""); setFeedback("");
+    try {
+      const query = buildQuery();
+      const res = await adminFetch(`/admin/audit-logs/export${query ? `?${query}` : ""}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data?.message ?? "Failed to export.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `admin-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setFeedback("Export downloaded.");
+    } catch {
+      setError("Failed to export.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div suppressHydrationWarning>
       <div className="admin-page-header">
         <h2 className="admin-page-title">Audit log</h2>
-        <span style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-          {meta.total.toLocaleString()} events
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+            {meta.total.toLocaleString()} events
+          </span>
+          <button className="admin-btn" onClick={exportCsv} disabled={exporting || loading}>
+            {exporting ? "Exporting…" : "Export CSV"}
+          </button>
+        </div>
       </div>
+
+      {feedback && <p className="narlit-feedback narlit-feedback-success">{feedback}</p>}
 
       <form onSubmit={applyFilters} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <input
@@ -171,15 +236,22 @@ export default function AdminAuditPage() {
                       ) : "—"}
                     </td>
                     <td style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{e.ip_address ?? "—"}</td>
-                    <td>
+                    <td style={{ whiteSpace: "nowrap" }}>
                       {e.metadata && Object.keys(e.metadata).length > 0 && (
                         <button
                           className="admin-btn"
                           onClick={() => setExpanded(expanded === e.public_id ? null : e.public_id)}
                         >
-                          {expanded === e.public_id ? "Hide" : "Details"}
+                          {expanded === e.public_id ? "Hide" : "Metadata"}
                         </button>
                       )}
+                      <button
+                        className="admin-btn"
+                        style={{ marginLeft: 4 }}
+                        onClick={() => openDetails(e)}
+                      >
+                        View
+                      </button>
                     </td>
                   </tr>
                   {expanded === e.public_id && (
@@ -216,6 +288,52 @@ export default function AdminAuditPage() {
           </div>
         )}
       </div>
+
+      {details && (
+        <div className="admin-modal-overlay" onClick={() => setDetails(null)}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+            <h3 style={{ marginTop: 0 }}>Audit event #{details.id}</h3>
+            <p style={{ color: "var(--muted)", fontSize: "0.8rem", margin: 0 }}>
+              {new Date(details.created_at).toLocaleString()}
+            </p>
+
+            {loadingDetails && <p className="admin-empty">Loading details…</p>}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "16px 0" }}>
+              <div><strong>Action:</strong> {details.action}</div>
+              <div><strong>Status:</strong> {details.status}</div>
+              <div><strong>Actor:</strong> {details.actor?.name ?? "System"}</div>
+              <div><strong>Email:</strong> {details.actor?.email ?? "—"}</div>
+              <div><strong>Entity type:</strong> {details.entity_type ?? "—"}</div>
+              <div><strong>Entity id:</strong> {details.entity_id ?? "—"}</div>
+              <div><strong>IP:</strong> <span style={{ fontFamily: "monospace" }}>{details.ip_address ?? "—"}</span></div>
+              <div><strong>Device:</strong> {details.device_summary ?? "—"}</div>
+            </div>
+
+            {details.user_agent && (
+              <div style={{ fontSize: "0.75rem", color: "var(--muted)", wordBreak: "break-all", marginBottom: 12 }}>
+                <strong>UA:</strong> {details.user_agent}
+              </div>
+            )}
+
+            {details.metadata && Object.keys(details.metadata).length > 0 && (
+              <>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>Metadata</div>
+                <pre style={{ margin: 0, padding: 12, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, fontSize: "0.75rem", maxHeight: 240, overflow: "auto" }}>
+                  {JSON.stringify(details.metadata, null, 2)}
+                </pre>
+              </>
+            )}
+
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+              {details.target_admin_path && (
+                <a className="admin-btn" href={details.target_admin_path}>Open target</a>
+              )}
+              <button className="admin-btn" onClick={() => setDetails(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clearAdminToken } from "@/lib/auth";
+import { adminFetch } from "@/lib/api";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   if (pathname === "/admin/login") return <>{children}</>;
 
-  function handleLogout() {
+  async function handleLogout() {
+    try { await adminFetch("/auth/logout", { method: "POST" }); } catch { /* noop */ }
     clearAdminToken();
     window.location.href = "/admin/login";
   }

@@ -108,6 +108,20 @@ export default function AdminUsersPage() {
     });
   }
 
+  function revokeTokens(u: AdminUser) {
+    if (!confirm(`Revoke all active sessions for ${u.full_name}? They will be signed out everywhere.`)) return;
+    setFeedback(""); setError("");
+    startTransition(async () => {
+      const res = await adminFetch(`/admin/users/${u.public_id}/tokens`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.message ?? "Failed to revoke tokens.");
+        return;
+      }
+      setFeedback(`Revoked ${data.data?.tokens_revoked ?? 0} session(s).`);
+    });
+  }
+
   return (
     <div suppressHydrationWarning>
       <div className="admin-page-header">
@@ -258,6 +272,9 @@ export default function AdminUsersPage() {
               </button>
               <button className="admin-btn" onClick={() => resetMfa(selectedUser)} disabled={isPending}>
                 Reset MFA
+              </button>
+              <button className="admin-btn admin-btn-reject" onClick={() => revokeTokens(selectedUser)} disabled={isPending}>
+                Revoke sessions
               </button>
               <button
                 className="admin-btn admin-btn-reject"

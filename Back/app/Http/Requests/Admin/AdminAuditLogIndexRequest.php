@@ -15,7 +15,7 @@ class AdminAuditLogIndexRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'actor' => ['nullable', 'uuid'],
+            'actor' => ['nullable', 'string', 'max:255'],
             'action' => ['nullable', 'string', 'max:120'],
             'entity_type' => ['nullable', 'string', 'max:120'],
             'ip_address' => ['nullable', 'ip'],
@@ -25,6 +25,7 @@ class AdminAuditLogIndexRequest extends FormRequest
             'search' => ['nullable', 'string', 'max:255'],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

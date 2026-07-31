@@ -23,4 +23,9 @@ class AdminDashboardController extends Controller
 
         return $this->success('Admin dashboard retrieved successfully.', $dashboard->dashboard($period));
     }
+
+    public function overview(AdminDashboardService $dashboard): JsonResponse
+    {
+        return $this->success('Admin overview retrieved successfully.', $dashboard->overview());
+    }
 }

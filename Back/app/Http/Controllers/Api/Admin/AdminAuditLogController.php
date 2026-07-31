@@ -19,9 +19,11 @@ class AdminAuditLogController extends Controller
     {
         $logs = $audit->paginate($request);
         $audit->logView($request, 'audit_log.viewed', null, ['filters' => $request->query()]);
+        $payload = AdminAuditLogResource::collection($logs)->response()->getData(true);
 
         return $this->success('Audit logs retrieved successfully.', [
-            'audit_logs' => AdminAuditLogResource::collection($logs)->response()->getData(true),
+            'audit_logs' => $payload,
+            'entries' => $payload,
         ]);
     }
 

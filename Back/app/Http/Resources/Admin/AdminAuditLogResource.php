@@ -11,23 +11,29 @@ class AdminAuditLogResource extends JsonResource
     public function toArray(Request $request): array
     {
         $audit = app(AdminAuditLogService::class);
+        $metadata = $audit->redact($audit->decodeMetadata($this->resource->metadata));
 
         return [
             'id' => $this->resource->id,
+            'public_id' => (string) $this->resource->id,
             'timestamp' => $this->resource->created_at,
+            'created_at' => $this->resource->created_at,
             'actor' => [
                 'public_id' => $this->resource->admin_public_id,
                 'name' => $this->resource->admin_name,
                 'email' => $this->resource->admin_email,
+                'role' => 'admin',
             ],
             'action' => $this->resource->action,
             'entity_type' => $this->resource->entity_type,
             'entity_id' => $this->resource->entity_id,
+            'target_type' => $this->resource->entity_type,
+            'target_label' => $this->resource->entity_id,
             'ip_address' => $this->resource->ip_address,
             'user_agent' => $this->resource->user_agent,
             'device_summary' => $this->deviceSummary((string) $this->resource->user_agent),
             'status' => $audit->status($this->resource),
-            'metadata' => $audit->redact($audit->decodeMetadata($this->resource->metadata)),
+            'metadata' => $metadata,
             'target_admin_path' => $this->targetPath(),
         ];
     }

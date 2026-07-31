@@ -45,6 +45,66 @@ function Sparkline({ points, color = "var(--teal)" }: { points: number[]; color?
   );
 }
 
+function QueueRow({
+  icon,
+  tone,
+  label,
+  hint,
+  count,
+  href,
+  action,
+  subtle,
+}: {
+  icon: string;
+  tone: "orange" | "teal" | "muted";
+  label: string;
+  hint: string;
+  count: number | string;
+  href: string;
+  action: string;
+  subtle?: boolean;
+}) {
+  return (
+    <li className="admin-queue-row">
+      <span className={`admin-queue-icon admin-queue-icon-${tone}`}>{icon}</span>
+      <div className="admin-queue-info">
+        <span className="admin-queue-label">{label}</span>
+        <span className="admin-queue-hint">{hint}</span>
+      </div>
+      <span className={`admin-queue-count admin-queue-count-${tone}`}>{count}</span>
+      <Link href={href} className={`admin-queue-action${subtle ? " admin-queue-action-subtle" : ""}`}>
+        {action} <span aria-hidden>→</span>
+      </Link>
+    </li>
+  );
+}
+
+function formatKind(kind: string): string {
+  return kind.replace(/_/g, " ").replace(/\./g, " · ");
+}
+
+function formatTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const diff = Math.floor((now - then) / 1000);
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function activityStyle(kind: string): { icon: string; tone: "orange" | "teal" | "muted" } {
+  const k = kind.toLowerCase();
+  if (k.includes("subscription")) return { icon: "💳", tone: "orange" };
+  if (k.includes("payout") || k.includes("donation")) return { icon: "💰", tone: "orange" };
+  if (k.includes("article")) return { icon: "📰", tone: "teal" };
+  if (k.includes("organization") || k.includes("org")) return { icon: "🏢", tone: "teal" };
+  if (k.includes("user")) return { icon: "👤", tone: "teal" };
+  if (k.includes("audit")) return { icon: "📋", tone: "muted" };
+  return { icon: "⚡", tone: "muted" };
+}
+
 function Bars({ points, color = "var(--orange)" }: { points: { label: string; value: number }[]; color?: string }) {
   const max = Math.max(1, ...points.map((p) => p.value));
   return (
@@ -93,7 +153,7 @@ export default function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div>
+      <div suppressHydrationWarning>
         <h2 className="admin-page-title">Dashboard</h2>
         <p className="admin-empty">Loading overview…</p>
       </div>
@@ -102,7 +162,7 @@ export default function AdminDashboardPage() {
 
   if (error || !overview) {
     return (
-      <div>
+      <div suppressHydrationWarning>
         <h2 className="admin-page-title">Dashboard</h2>
         <p className="admin-empty">{error || "No data available."}</p>
       </div>
@@ -179,78 +239,94 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Queues + Activity */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20 }}>
-        <div className="admin-table-wrap">
-          <h3 style={{ margin: "0 0 12px", fontSize: "1rem", fontWeight: 700 }}>Review queues</h3>
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Queue</th>
-                <th>Count</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Pending organizations</td>
-                <td><strong>{overview.organizations.pending}</strong></td>
-                <td>
-                  <Link href="/admin/organizations?status=pending" className="admin-btn admin-btn-approve">
-                    Review →
-                  </Link>
-                </td>
-              </tr>
-              <tr>
-                <td>Articles awaiting review</td>
-                <td><strong>{overview.articles.pending_review}</strong></td>
-                <td>
-                  <Link href="/admin/articles?status=pending_review" className="admin-btn admin-btn-approve">
-                    Review →
-                  </Link>
-                </td>
-              </tr>
-              <tr>
-                <td>Payouts pending release</td>
-                <td><strong>${overview.donations.pending_payout}</strong></td>
-                <td>
-                  <Link href="/admin/payouts" className="admin-btn admin-btn-approve">
-                    Manage →
-                  </Link>
-                </td>
-              </tr>
-              <tr>
-                <td>Canceled this month</td>
-                <td><strong>{overview.subscriptions.canceled_this_month}</strong></td>
-                <td>
-                  <Link href="/admin/subscriptions?status=canceled" className="admin-btn">
-                    View
-                  </Link>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div className="admin-dash-two-col">
+        <section className="admin-panel">
+          <header className="admin-panel-header">
+            <div>
+              <h3 className="admin-panel-title">Review queues</h3>
+              <p className="admin-panel-sub">Items awaiting your attention</p>
+            </div>
+            <span className="admin-panel-count">{
+              overview.organizations.pending +
+              overview.articles.pending_review +
+              overview.subscriptions.canceled_this_month
+            }</span>
+          </header>
 
-        <div className="admin-table-wrap">
-          <h3 style={{ margin: "0 0 12px", fontSize: "1rem", fontWeight: 700 }}>Recent activity</h3>
-          {overview.activity.length === 0 && <p className="admin-empty">No recent activity.</p>}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {overview.activity.slice(0, 8).map((a, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
-                <div>
-                  <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>{a.label}</span>
-                  <div style={{ fontSize: "0.72rem", color: "var(--muted)" }}>{a.kind}</div>
-                </div>
-                <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>
-                  {new Date(a.timestamp).toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
-          <Link href="/admin/audit" className="admin-btn" style={{ marginTop: 12, display: "inline-block" }}>
+          <ul className="admin-queue-list">
+            <QueueRow
+              icon="🏢"
+              tone="orange"
+              label="Pending organizations"
+              hint="Awaiting approval"
+              count={overview.organizations.pending}
+              href="/admin/organizations?status=pending"
+              action="Review"
+            />
+            <QueueRow
+              icon="📰"
+              tone="teal"
+              label="Articles awaiting review"
+              hint="Editorial queue"
+              count={overview.articles.pending_review}
+              href="/admin/articles?status=pending_review"
+              action="Review"
+            />
+            <QueueRow
+              icon="💰"
+              tone="orange"
+              label="Payouts pending release"
+              hint="Ready to disburse"
+              count={`$${overview.donations.pending_payout}`}
+              href="/admin/payouts"
+              action="Manage"
+            />
+            <QueueRow
+              icon="↩️"
+              tone="muted"
+              label="Canceled this month"
+              hint="Subscription drop-offs"
+              count={overview.subscriptions.canceled_this_month}
+              href="/admin/subscriptions?status=canceled"
+              action="View"
+              subtle
+            />
+          </ul>
+        </section>
+
+        <section className="admin-panel">
+          <header className="admin-panel-header">
+            <div>
+              <h3 className="admin-panel-title">Recent activity</h3>
+              <p className="admin-panel-sub">Latest events across the platform</p>
+            </div>
+            <span className="admin-panel-count admin-panel-count-teal">{overview.activity.length}</span>
+          </header>
+
+          {overview.activity.length === 0 ? (
+            <p className="admin-empty">No recent activity.</p>
+          ) : (
+            <ul className="admin-activity-list">
+              {overview.activity.slice(0, 8).map((a, i) => {
+                const { icon, tone } = activityStyle(a.kind);
+                return (
+                  <li key={i} className="admin-activity-item">
+                    <span className={`admin-activity-icon admin-activity-icon-${tone}`}>{icon}</span>
+                    <div className="admin-activity-body">
+                      <span className="admin-activity-label">{a.label}</span>
+                      <span className="admin-activity-kind">{formatKind(a.kind)}</span>
+                    </div>
+                    <span className="admin-activity-time">{formatTime(a.timestamp)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <Link href="/admin/audit" className="admin-panel-footer-link">
             View full audit log →
           </Link>
-        </div>
+        </section>
       </div>
 
       {/* Bottom breakdown */}

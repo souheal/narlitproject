@@ -36,6 +36,15 @@ class AdminPayoutController extends Controller
         ]);
     }
 
+    public function items(string $publicId, AdminPayoutService $payouts): JsonResponse
+    {
+        $batch = $payouts->details($publicId);
+
+        return $this->success('Payout items retrieved successfully.', [
+            'items' => AdminPayoutItemResource::collection($batch->items)->resolve(),
+        ]);
+    }
+
     public function generate(GeneratePayoutBatchRequest $request, AdminPayoutService $payouts): JsonResponse
     {
         $result = $payouts->generate(

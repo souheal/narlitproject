@@ -20,6 +20,7 @@ class AdminAnalyticsRequest extends FormRequest
             'interval' => ['nullable', Rule::in(['day', 'week', 'month'])],
             'compare' => ['nullable', 'boolean'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'range' => ['nullable', Rule::in(['7d', '30d', '90d', '12m'])],
         ];
     }
 }

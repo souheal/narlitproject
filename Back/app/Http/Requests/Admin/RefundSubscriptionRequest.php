@@ -4,7 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateUserStatusRequest extends FormRequest
+class RefundSubscriptionRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -14,7 +14,7 @@ class UpdateUserStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'is_active' => ['required', 'boolean'],
+            'reason' => ['nullable', 'string', 'min:10', 'max:1000'],
         ];
     }
 }

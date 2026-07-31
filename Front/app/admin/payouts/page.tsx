@@ -38,6 +38,23 @@ interface PayoutSummary {
   organizations_missing_stripe: number;
 }
 
+function batchTone(status: string): "orange" | "teal" | "muted" | "rejected" {
+  const s = status.toLowerCase();
+  if (s === "completed" || s === "paid") return "teal";
+  if (s === "failed") return "rejected";
+  if (s === "pending" || s === "processing") return "orange";
+  return "muted";
+}
+
+function batchIcon(status: string): string {
+  const s = status.toLowerCase();
+  if (s === "completed" || s === "paid") return "✅";
+  if (s === "failed") return "❌";
+  if (s === "processing") return "⚙️";
+  if (s === "pending") return "⏳";
+  return "📦";
+}
+
 export default function AdminPayoutsPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [summary, setSummary] = useState<PayoutSummary | null>(null);
@@ -164,52 +181,81 @@ export default function AdminPayoutsPage() {
         </div>
       )}
 
-      <div className="admin-table-wrap">
-        <h3 style={{ margin: "0 0 12px", fontSize: "1rem" }}>Payout batches</h3>
+      <section className="admin-panel">
+        <header className="admin-panel-header">
+          <div>
+            <h3 className="admin-panel-title">Payout batches</h3>
+            <p className="admin-panel-sub">Monthly revenue distribution to organizations</p>
+          </div>
+          <div className="admin-panel-stat">
+            <span className="admin-panel-stat-value">{batches.length}</span>
+            <span className="admin-panel-stat-label">batches</span>
+          </div>
+        </header>
+
         {loading && <p className="admin-empty">Loading…</p>}
-        {!loading && batches.length === 0 && <p className="admin-empty">No payout batches yet.</p>}
+        {!loading && batches.length === 0 && (
+          <div className="admin-chart-empty">
+            <span className="admin-chart-empty-icon">💸</span>
+            <span className="admin-chart-empty-title">No payout batches yet</span>
+            <span className="admin-chart-empty-hint">Generate a batch to distribute this period's earnings to organizations.</span>
+          </div>
+        )}
         {!loading && batches.length > 0 && (
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Period</th>
-                <th>Amount</th>
-                <th>Orgs</th>
-                <th>Items</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {batches.map((b) => (
-                <tr key={b.public_id}>
-                  <td>{new Date(b.period_start).toLocaleDateString()} — {new Date(b.period_end).toLocaleDateString()}</td>
-                  <td><strong>${b.total_amount}</strong> {b.currency}</td>
-                  <td>{b.total_organizations}</td>
-                  <td>{b.total_items}</td>
-                  <td>
-                    <span className={`admin-badge ${b.status === "completed" ? "admin-badge-success" : b.status === "failed" ? "admin-badge-rejected" : "admin-badge-pending"}`}>
-                      {b.status}
-                    </span>
-                  </td>
-                  <td>{new Date(b.created_at).toLocaleDateString()}</td>
-                  <td>
-                    <div className="admin-actions">
-                      <button className="admin-btn" onClick={() => openBatchDetails(b)}>Details</button>
-                      {b.status === "pending" && (
-                        <button className="admin-btn admin-btn-approve" onClick={() => executeBatch(b)} disabled={isPending}>
-                          Execute
-                        </button>
+          <ul className="admin-batch-list">
+            {batches.map((b) => {
+              const tone = batchTone(b.status);
+              return (
+                <li key={b.public_id} className="admin-batch-row">
+                  <span className={`admin-batch-icon admin-batch-icon-${tone}`}>{batchIcon(b.status)}</span>
+
+                  <div className="admin-batch-main">
+                    <div className="admin-batch-period">
+                      {new Date(b.period_start).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      <span className="admin-batch-arrow">→</span>
+                      {new Date(b.period_end).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                    </div>
+                    <div className="admin-batch-meta">
+                      <span>Created {new Date(b.created_at).toLocaleDateString()}</span>
+                      {b.executed_at && (
+                        <>
+                          <span className="admin-batch-dot" />
+                          <span>Executed {new Date(b.executed_at).toLocaleDateString()}</span>
+                        </>
                       )}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+
+                  <div className="admin-batch-stats">
+                    <div className="admin-batch-amount">
+                      <span className="admin-batch-amount-value">${b.total_amount}</span>
+                      <span className="admin-batch-amount-currency">{b.currency}</span>
+                    </div>
+                    <div className="admin-batch-counts">
+                      <span>🏢 {b.total_organizations}</span>
+                      <span className="admin-batch-dot" />
+                      <span>📄 {b.total_items}</span>
+                    </div>
+                  </div>
+
+                  <span className={`admin-badge ${b.status === "completed" ? "admin-badge-success" : b.status === "failed" ? "admin-badge-rejected" : "admin-badge-pending"}`}>
+                    {b.status}
+                  </span>
+
+                  <div className="admin-batch-actions">
+                    <button className="admin-btn" onClick={() => openBatchDetails(b)}>Details</button>
+                    {b.status === "pending" && (
+                      <button className="admin-btn admin-btn-approve" onClick={() => executeBatch(b)} disabled={isPending}>
+                        Execute
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
-      </div>
+      </section>
 
       {openBatch && (
         <div className="admin-modal-overlay" onClick={() => setOpenBatch(null)}>

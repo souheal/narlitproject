@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdminUserActionRequest;
-use App\Http\Requests\Admin\UpdateUserStatusRequest;
 use App\Http\Resources\Admin\AdminUserDetailResource;
 use App\Http\Resources\Admin\AdminUserResource;
 use App\Services\Admin\AdminUserService;
@@ -30,11 +29,20 @@ class AdminUserController extends Controller
         ]);
     }
 
-    public function updateStatus(string $publicId, UpdateUserStatusRequest $request, AdminUserService $users): JsonResponse
+    public function suspend(string $publicId, AdminUserActionRequest $request, AdminUserService $users): JsonResponse
     {
-        $user = $users->updateStatus($request->user(), $publicId, (bool) $request->validated('is_active'), $request);
+        $user = $users->updateStatus($request->user(), $publicId, false, $request);
 
-        return $this->success('User status updated successfully.', [
+        return $this->success('User suspended successfully.', [
+            'user' => new AdminUserResource($users->details($user->public_id)),
+        ]);
+    }
+
+    public function activate(string $publicId, AdminUserActionRequest $request, AdminUserService $users): JsonResponse
+    {
+        $user = $users->updateStatus($request->user(), $publicId, true, $request);
+
+        return $this->success('User activated successfully.', [
             'user' => new AdminUserResource($users->details($user->public_id)),
         ]);
     }

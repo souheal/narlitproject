@@ -9,6 +9,232 @@ use Illuminate\Support\Facades\DB;
 
 class AdminAnalyticsService
 {
+    public function combined(Request $request): array
+    {
+        [$start, $end] = $this->rangeFromShorthand($request);
+        $days = (int) $start->diffInDays($end) + 1;
+        $isMonthly = $days > 90;
+        $interval = $isMonthly ? 'month' : 'day';
+
+        $signups = DB::table('users')->whereBetween('created_at', [$start, $end])->count();
+        $activated = DB::table('users')
+            ->whereBetween('created_at', [$start, $end])
+            ->whereNotNull('email_verified_at')
+            ->count();
+        $paying = DB::table('subscriptions')
+            ->join('users', 'users.id', '=', 'subscriptions.user_id')
+            ->whereBetween('users.created_at', [$start, $end])
+            ->where('subscriptions.status', 'active')
+            ->distinct('users.id')
+            ->count('users.id');
+
+        $buckets = $this->buckets($start, $end, $interval);
+        $signupRows = $this->countRows('users', 'created_at', $start, $end, $interval);
+        $activationRows = DB::table('users')
+            ->selectRaw($this->periodExpression('email_verified_at', $interval).' as bucket, COUNT(*) as value')
+            ->whereBetween('email_verified_at', [$start, $end])
+            ->groupBy('bucket')
+            ->pluck('value', 'bucket');
+        $readRows = $this->countRows('article_reads', 'created_at', $start, $end, $interval);
+        $revenueRows = DB::table('payments')
+            ->selectRaw($this->periodExpression('paid_at', $interval).' as bucket, SUM(amount) as value')
+            ->where('status', 'paid')
+            ->whereBetween('paid_at', [$start, $end])
+            ->groupBy('bucket')
+            ->pluck('value', 'bucket');
+
+        $signupSeries = $this->dateSeries($buckets, $signupRows);
+        $activationSeries = $this->dateSeries($buckets, $activationRows);
+        $readSeries = $this->dateSeries($buckets, $readRows);
+        $revenueSeries = $this->dateAmountSeries($buckets, $revenueRows);
+
+        $topOrgsRaw = DB::table('organization_profiles')
+            ->leftJoin('articles', 'articles.organization_profile_id', '=', 'organization_profiles.id')
+            ->leftJoin('article_reads', function ($join) use ($start, $end): void {
+                $join->on('article_reads.article_id', '=', 'articles.id')
+                    ->whereBetween('article_reads.created_at', [$start, $end]);
+            })
+            ->leftJoin('impact_transactions', function ($join) use ($start, $end): void {
+                $join->on('impact_transactions.organization_profile_id', '=', 'organization_profiles.id')
+                    ->whereBetween('impact_transactions.created_at', [$start, $end]);
+            })
+            ->selectRaw('organization_profiles.public_id, organization_profiles.organization_name')
+            ->selectRaw('COUNT(DISTINCT article_reads.id) as reads')
+            ->selectRaw('COALESCE(SUM(DISTINCT impact_transactions.amount), 0) as impact_amount')
+            ->groupBy('organization_profiles.id', 'organization_profiles.public_id', 'organization_profiles.organization_name')
+            ->orderByDesc('reads')
+            ->limit(10)
+            ->get();
+
+        $topArticlesRaw = DB::table('articles')
+            ->leftJoin('organization_profiles', 'organization_profiles.id', '=', 'articles.organization_profile_id')
+            ->leftJoin('article_reads', function ($join) use ($start, $end): void {
+                $join->on('article_reads.article_id', '=', 'articles.id')
+                    ->whereBetween('article_reads.created_at', [$start, $end]);
+            })
+            ->selectRaw('articles.public_id, articles.title, organization_profiles.organization_name as organization')
+            ->selectRaw('COUNT(DISTINCT article_reads.id) as reads')
+            ->groupBy('articles.id', 'articles.public_id', 'articles.title', 'organization_profiles.organization_name')
+            ->orderByDesc('reads')
+            ->limit(10)
+            ->get();
+
+        $categoryReads = DB::table('articles')
+            ->join('article_reads', 'article_reads.article_id', '=', 'articles.id')
+            ->whereBetween('article_reads.created_at', [$start, $end])
+            ->groupBy('articles.category')
+            ->selectRaw("COALESCE(articles.category, 'Uncategorized') as category, COUNT(article_reads.id) as reads")
+            ->get();
+        $categoryTotal = max(1, (int) $categoryReads->sum('reads'));
+        $categories = $categoryReads->map(fn (object $row): array => [
+            'category' => (string) $row->category,
+            'reads' => (int) $row->reads,
+            'percent' => (int) round(((int) $row->reads / $categoryTotal) * 100),
+        ])->values()->all();
+
+        $funnelSteps = [
+            'Sign up' => DB::table('users')->whereBetween('created_at', [$start, $end])->count(),
+            'Verified email' => DB::table('users')->whereBetween('created_at', [$start, $end])->whereNotNull('email_verified_at')->count(),
+            'Subscribed' => DB::table('subscriptions')
+                ->join('users', 'users.id', '=', 'subscriptions.user_id')
+                ->whereBetween('users.created_at', [$start, $end])
+                ->distinct('users.id')
+                ->count('users.id'),
+            'First read' => DB::table('article_reads')
+                ->join('users', 'users.id', '=', 'article_reads.user_id')
+                ->whereBetween('users.created_at', [$start, $end])
+                ->distinct('article_reads.user_id')
+                ->count('article_reads.user_id'),
+        ];
+        $funnelBase = max(1, (int) $funnelSteps['Sign up']);
+        $funnel = collect($funnelSteps)->map(fn (int $count, string $stage): array => [
+            'stage' => $stage,
+            'count' => $count,
+            'percent' => (int) round(($count / $funnelBase) * 100),
+        ])->values()->all();
+
+        $cohorts = $this->cohortsFor($start, $end);
+        $retentionAvg = $cohorts === []
+            ? 0.0
+            : collect($cohorts)
+                ->map(function (array $row): float {
+                    if ($row['total'] === 0) {
+                        return 0.0;
+                    }
+                    $laterMonths = array_slice($row['retained'], 1);
+                    if ($laterMonths === []) {
+                        return 0.0;
+                    }
+                    return (array_sum($laterMonths) / count($laterMonths)) / max(1, $row['total']) * 100;
+                })
+                ->avg();
+
+        return [
+            'range' => (string) $request->query('range', '30d'),
+            'currency' => (string) config('services.stripe.currency', 'USD'),
+            'totals' => [
+                'signups' => $signups,
+                'activated' => $activated,
+                'activation_rate' => $signups > 0 ? round(($activated / $signups) * 100, 2) : 0.0,
+                'paying' => $paying,
+                'conversion_rate' => $signups > 0 ? round(($paying / $signups) * 100, 2) : 0.0,
+            ],
+            'timeseries' => [
+                'signups' => $signupSeries,
+                'activations' => $activationSeries,
+                'reads' => $readSeries,
+                'revenue' => $revenueSeries,
+            ],
+            'top_organizations' => $topOrgsRaw->map(fn (object $row): array => [
+                'public_id' => (string) $row->public_id,
+                'name' => (string) $row->organization_name,
+                'reads' => (int) $row->reads,
+                'earned' => number_format((float) $row->impact_amount, 2, '.', ''),
+            ])->values()->all(),
+            'top_articles' => $topArticlesRaw->map(fn (object $row): array => [
+                'public_id' => (string) $row->public_id,
+                'title' => (string) $row->title,
+                'organization' => (string) ($row->organization ?? 'Unknown'),
+                'reads' => (int) $row->reads,
+            ])->values()->all(),
+            'categories' => $categories,
+            'funnel' => $funnel,
+            'cohorts' => $cohorts,
+            'retention_avg' => round((float) $retentionAvg, 2),
+        ];
+    }
+
+    protected function rangeFromShorthand(Request $request): array
+    {
+        $end = now();
+        $range = (string) $request->query('range', '30d');
+        $start = match ($range) {
+            '7d' => $end->copy()->subDays(6)->startOfDay(),
+            '90d' => $end->copy()->subDays(89)->startOfDay(),
+            '12m' => $end->copy()->subMonths(11)->startOfMonth(),
+            default => $end->copy()->subDays(29)->startOfDay(),
+        };
+
+        return [$start, $end];
+    }
+
+    protected function dateSeries(array $buckets, $rows): array
+    {
+        return collect($buckets)->map(fn (array $bucket): array => [
+            'date' => $bucket['bucket'],
+            'count' => (int) ($rows[$bucket['bucket']] ?? 0),
+        ])->all();
+    }
+
+    protected function dateAmountSeries(array $buckets, $rows): array
+    {
+        return collect($buckets)->map(fn (array $bucket): array => [
+            'date' => $bucket['bucket'],
+            'amount' => round((float) ($rows[$bucket['bucket']] ?? 0), 2),
+        ])->all();
+    }
+
+    protected function cohortsFor(Carbon $start, Carbon $end): array
+    {
+        $cohortExpr = $this->periodExpression('users.created_at', 'month');
+        $activityExpr = $this->periodExpression('article_reads.created_at', 'month');
+
+        $cohortRows = DB::table('users')
+            ->whereBetween('created_at', [$start, $end])
+            ->selectRaw("{$cohortExpr} as cohort_month, COUNT(*) as cohort_size")
+            ->groupBy('cohort_month')
+            ->orderBy('cohort_month')
+            ->get();
+
+        if ($cohortRows->isEmpty()) {
+            return [];
+        }
+
+        $activityRows = DB::table('users')
+            ->join('article_reads', 'article_reads.user_id', '=', 'users.id')
+            ->whereBetween('users.created_at', [$start, $end])
+            ->selectRaw("{$cohortExpr} as cohort_month, {$activityExpr} as activity_month, COUNT(DISTINCT users.id) as active")
+            ->groupBy('cohort_month', 'activity_month')
+            ->get();
+
+        return $cohortRows->map(function (object $cohort) use ($activityRows): array {
+            $cohortMonth = (string) $cohort->cohort_month;
+            $size = (int) $cohort->cohort_size;
+            $retained = [];
+            for ($offset = 0; $offset < 4; $offset++) {
+                $activityMonth = Carbon::parse($cohortMonth.'-01')->addMonthsNoOverflow($offset)->format('Y-m');
+                $match = $activityRows->first(fn (object $row): bool => $row->cohort_month === $cohortMonth && $row->activity_month === $activityMonth);
+                $retained[] = $match ? (int) $match->active : 0;
+            }
+
+            return [
+                'cohort' => $cohortMonth,
+                'total' => $size,
+                'retained' => $retained,
+            ];
+        })->values()->all();
+    }
+
     public function overview(Request $request): array
     {
         return $this->cached('overview', $request, function () use ($request): array {

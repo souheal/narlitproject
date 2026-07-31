@@ -8,11 +8,189 @@ use App\Models\ImpactTransaction;
 use App\Models\OrganizationProfile;
 use App\Models\Payment;
 use App\Models\Subscription;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class AdminDashboardService
 {
+    public function overview(): array
+    {
+        $now = now();
+        $monthStart = $now->copy()->startOfMonth();
+        $lastMonthStart = $now->copy()->subMonthNoOverflow()->startOfMonth();
+        $lastMonthEnd = $monthStart->copy()->subSecond();
+        $sparklineStart = $now->copy()->subDays(29)->startOfDay();
+
+        $activeSubscribers = $this->activeSubscribersAt($now);
+        $mrr = $this->mrrAt($now);
+        $canceledThisMonth = Subscription::query()
+            ->whereBetween('canceled_at', [$monthStart, $now])
+            ->count();
+        $activeAtMonthStart = $this->activeSubscribersAt($monthStart);
+        $churnRate = $activeAtMonthStart > 0
+            ? round(($canceledThisMonth / $activeAtMonthStart) * 100, 2)
+            : 0.0;
+
+        $currency = (string) config('services.stripe.currency', 'USD');
+
+        $usersByDay = $this->countByDaySeries(User::query()->getModel()->getTable(), $sparklineStart, $now);
+        $readsByDay = $this->countByDaySeries((new ArticleRead)->getTable(), $sparklineStart, $now);
+        $revenueByMonth = $this->revenueByMonthSeries($now, 6);
+
+        return [
+            'overview' => [
+                'users' => [
+                    'total' => User::query()->count(),
+                    'active' => User::query()->where('is_active', true)->count(),
+                    'new_this_month' => User::query()->where('created_at', '>=', $monthStart)->count(),
+                    'new_last_month' => User::query()
+                        ->whereBetween('created_at', [$lastMonthStart, $lastMonthEnd])
+                        ->count(),
+                ],
+                'subscriptions' => [
+                    'active' => $activeSubscribers,
+                    'mrr' => $this->money($mrr),
+                    'arr' => $this->money($mrr * 12),
+                    'canceled_this_month' => $canceledThisMonth,
+                    'churn_rate' => $churnRate,
+                ],
+                'organizations' => [
+                    'total' => OrganizationProfile::query()->count(),
+                    'pending' => OrganizationProfile::query()->where('verification_status', 'pending')->count(),
+                    'approved' => OrganizationProfile::query()->where('verification_status', 'approved')->count(),
+                    'rejected' => OrganizationProfile::query()->where('verification_status', 'rejected')->count(),
+                ],
+                'articles' => [
+                    'total' => Article::query()->count(),
+                    'published' => Article::query()->where('status', 'published')->count(),
+                    'pending_review' => Article::query()->where('status', 'pending_review')->count(),
+                    'rejected' => Article::query()->where('status', 'rejected')->count(),
+                ],
+                'reads' => [
+                    'this_month' => ArticleRead::query()->where('created_at', '>=', $monthStart)->count(),
+                    'last_month' => ArticleRead::query()
+                        ->whereBetween('created_at', [$lastMonthStart, $lastMonthEnd])
+                        ->count(),
+                    'all_time' => ArticleRead::query()->count(),
+                ],
+                'donations' => [
+                    'paid_out_all_time' => $this->money((float) DB::table('payout_items')
+                        ->where('transfer_status', 'succeeded')
+                        ->sum('payout_amount')),
+                    'paid_out_this_month' => $this->money((float) DB::table('payout_items')
+                        ->where('transfer_status', 'succeeded')
+                        ->where('transferred_at', '>=', $monthStart)
+                        ->sum('payout_amount')),
+                    'pending_payout' => $this->money((float) DB::table('payout_items')
+                        ->whereIn('transfer_status', ['pending', 'failed'])
+                        ->sum('payout_amount')),
+                ],
+                'currency' => $currency,
+                'activity' => $this->overviewActivity(),
+                'charts' => [
+                    'users_by_day' => $usersByDay,
+                    'reads_by_day' => $readsByDay,
+                    'revenue_by_month' => $revenueByMonth,
+                ],
+            ],
+        ];
+    }
+
+    protected function countByDaySeries(string $table, Carbon $start, Carbon $end): array
+    {
+        $rows = DB::table($table)
+            ->selectRaw('DATE(created_at) as day, COUNT(*) as value')
+            ->whereBetween('created_at', [$start, $end])
+            ->groupBy('day')
+            ->pluck('value', 'day');
+
+        $series = [];
+        $cursor = $start->copy()->startOfDay();
+        $last = $end->copy()->startOfDay();
+
+        while ($cursor <= $last) {
+            $day = $cursor->toDateString();
+            $series[] = [
+                'date' => $day,
+                'count' => (int) ($rows[$day] ?? 0),
+            ];
+            $cursor->addDay();
+        }
+
+        return $series;
+    }
+
+    protected function revenueByMonthSeries(Carbon $end, int $months): array
+    {
+        $series = [];
+        $cursor = $end->copy()->startOfMonth()->subMonthsNoOverflow($months - 1);
+
+        for ($i = 0; $i < $months; $i++) {
+            $monthStart = $cursor->copy()->startOfMonth();
+            $monthEnd = $cursor->copy()->endOfMonth();
+            $amount = (float) Payment::query()
+                ->where('status', 'succeeded')
+                ->whereBetween('paid_at', [$monthStart, $monthEnd])
+                ->sum('amount');
+            $series[] = [
+                'month' => $cursor->format('Y-M'),
+                'amount' => round($amount, 2),
+            ];
+            $cursor->addMonthNoOverflow();
+        }
+
+        return $series;
+    }
+
+    protected function overviewActivity(): array
+    {
+        $items = [];
+
+        DB::table('admin_logs')
+            ->join('users', 'users.id', '=', 'admin_logs.admin_id')
+            ->latest('admin_logs.created_at')
+            ->limit(5)
+            ->get(['admin_logs.action', 'admin_logs.entity_type', 'admin_logs.created_at', 'users.full_name as admin_name'])
+            ->each(function (object $log) use (&$items): void {
+                $items[] = [
+                    'label' => trim(($log->admin_name ?? 'Admin').' — '.$log->action),
+                    'timestamp' => Carbon::parse($log->created_at)->toIso8601String(),
+                    'kind' => 'admin_'.$log->entity_type,
+                ];
+            });
+
+        Subscription::query()
+            ->with('user:id,full_name')
+            ->latest()
+            ->limit(3)
+            ->get(['id', 'user_id', 'plan', 'status', 'created_at'])
+            ->each(function (Subscription $subscription) use (&$items): void {
+                $items[] = [
+                    'label' => ($subscription->user?->full_name ?? 'Subscriber').' — '.$subscription->plan.' ('.$subscription->status.')',
+                    'timestamp' => $subscription->created_at?->toIso8601String() ?? Carbon::now()->toIso8601String(),
+                    'kind' => 'subscription',
+                ];
+            });
+
+        OrganizationProfile::query()
+            ->whereNotNull('reviewed_at')
+            ->latest('reviewed_at')
+            ->limit(3)
+            ->get(['organization_name', 'verification_status', 'reviewed_at'])
+            ->each(function (OrganizationProfile $profile) use (&$items): void {
+                $items[] = [
+                    'label' => $profile->organization_name.' — '.$profile->verification_status,
+                    'timestamp' => $profile->reviewed_at?->toIso8601String() ?? Carbon::now()->toIso8601String(),
+                    'kind' => 'organization',
+                ];
+            });
+
+        usort($items, fn (array $a, array $b): int => strcmp($b['timestamp'], $a['timestamp']));
+
+        return array_slice($items, 0, 10);
+    }
+
     public function dashboard(string $period): array
     {
         $range = $this->rangeForPeriod($period);

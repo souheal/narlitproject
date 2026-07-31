@@ -1,7 +1,26 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep *)"
+      "Bash(grep *)",
+      "Bash(npx tsc *)",
+      "Bash(tee /tmp/tsc-out.txt)",
+      "Bash(echo \"---exit=$?---\")",
+      "Read(//tmp/**)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /tmp/subs.html -w \"STATUS=%{http_code}\\\\n\" http://localhost:3002/admin/subscriptions)",
+      "Bash(tee /tmp/tsc-out2.txt)",
+      "Bash(kill %1)",
+      "Bash(jobs -l)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(tee /tmp/tsc3.txt)",
+      "Bash(tee /tmp/tsc4.txt)",
+      "Bash(curl -s -o /tmp/health.txt -w \"STATUS=%{http_code}\\\\nTIME=%{time_total}\\\\n\" http://127.0.0.1:8000/api/v1)",
+      "Bash(tee /tmp/tsc5.txt)",
+      "Bash(tee /tmp/tsc6.txt)",
+      "Bash(tee /tmp/tsc7.txt)",
+      "Bash(tee /tmp/tsc8.txt)",
+      "Bash(tee /tmp/tsc9.txt)",
+      "Bash(tee /tmp/tsc10.txt)"
     ]
   }
 }

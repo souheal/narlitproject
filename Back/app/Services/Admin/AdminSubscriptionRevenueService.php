@@ -15,6 +15,111 @@ use Stripe\StripeClient;
 
 class AdminSubscriptionRevenueService
 {
+    public function metrics(): array
+    {
+        $now = now();
+        $monthStart = $now->copy()->startOfMonth();
+        $lastMonthStart = $now->copy()->subMonthNoOverflow()->startOfMonth();
+        $lastMonthEnd = $monthStart->copy()->subSecond();
+        $currency = (string) config('services.stripe.currency', 'USD');
+
+        $active = Subscription::query()
+            ->where('status', 'active')
+            ->where('expires_at', '>', $now)
+            ->get(['user_id', 'plan', 'amount', 'currency']);
+        $mrrCents = $active->sum(fn (Subscription $sub): int => $this->monthlyCents($sub));
+        $activeCount = $active->pluck('user_id')->unique()->count();
+
+        $canceledThisMonth = Subscription::query()
+            ->whereBetween('canceled_at', [$monthStart, $now])
+            ->count();
+        $newThisMonth = Subscription::query()
+            ->whereBetween('created_at', [$monthStart, $now])
+            ->count();
+        $subscribersAtMonthStart = Subscription::query()
+            ->where('status', 'active')
+            ->where('started_at', '<=', $monthStart)
+            ->where(function ($query) use ($monthStart): void {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>', $monthStart);
+            })
+            ->count();
+        $churnRate = $subscribersAtMonthStart > 0
+            ? round(($canceledThisMonth / $subscribersAtMonthStart) * 100, 2)
+            : 0.0;
+        $arpuCents = $activeCount > 0 ? intdiv($mrrCents, $activeCount) : 0;
+        $ltvCents = $churnRate > 0 ? (int) round($arpuCents / ($churnRate / 100)) : 0;
+
+        $revenueByMonth = [];
+        $cursor = $now->copy()->startOfMonth()->subMonthsNoOverflow(5);
+        for ($i = 0; $i < 6; $i++) {
+            $bucketStart = $cursor->copy()->startOfMonth();
+            $bucketEnd = $cursor->copy()->endOfMonth();
+            $amount = (float) Payment::query()
+                ->where('status', 'paid')
+                ->whereBetween('paid_at', [$bucketStart, $bucketEnd])
+                ->sum('amount');
+            $revenueByMonth[] = [
+                'month' => $cursor->format('Y-M'),
+                'amount' => round($amount, 2),
+            ];
+            $cursor->addMonthNoOverflow();
+        }
+
+        $planBreakdown = $active
+            ->groupBy('plan')
+            ->map(function ($group, string $plan): array {
+                $planCents = $group->sum(fn (Subscription $sub): int => $this->monthlyCents($sub));
+
+                return [
+                    'plan' => $plan,
+                    'count' => $group->count(),
+                    'mrr' => $this->money($planCents),
+                ];
+            })
+            ->values()
+            ->all();
+
+        $failedPayments = Payment::query()
+            ->whereIn('status', ['failed', 'past_due'])
+            ->where('created_at', '>=', $now->copy()->subDays(30))
+            ->count();
+
+        return [
+            'mrr' => $this->money($mrrCents),
+            'arr' => $this->money($mrrCents * 12),
+            'active_count' => $activeCount,
+            'canceled_this_month' => $canceledThisMonth,
+            'new_this_month' => $newThisMonth,
+            'churn_rate' => $churnRate,
+            'ltv' => $this->money($ltvCents),
+            'arpu' => $this->money($arpuCents),
+            'currency' => $currency,
+            'plans' => $planBreakdown,
+            'revenue_by_month' => $revenueByMonth,
+            'failed_payments' => $failedPayments,
+        ];
+    }
+
+    public function refundLatestForSubscription(User $admin, string $publicId, string $reason, Request $request): Payment
+    {
+        $subscription = Subscription::query()
+            ->with(['payments' => fn ($query) => $query->latest('paid_at')])
+            ->where('public_id', $publicId)
+            ->first();
+
+        if ($subscription === null) {
+            throw new ApiException('Subscription was not found.', 404);
+        }
+
+        $payment = $subscription->payments->first(fn (Payment $p): bool => $p->status === 'paid' && $p->refunded_at === null);
+
+        if ($payment === null) {
+            throw new ApiException('No refundable payment exists for this subscription.', 422);
+        }
+
+        return $this->refund($admin, $payment->public_id, $reason, $request);
+    }
+
     public function summary(Request $request): array
     {
         $end = $request->filled('date_to') ? Carbon::parse($request->query('date_to'))->endOfDay() : now();
