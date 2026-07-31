@@ -85,5 +85,13 @@ class FortifyServiceProvider extends ServiceProvider
         RateLimiter::for('admin.users.reset_mfa', fn (Request $request) => [
             Limit::perMinutes(10, 5)->by(($request->user()?->id ?? 'guest').'|'.$request->ip()),
         ]);
+
+        RateLimiter::for('admin.sensitive', fn (Request $request) => [
+            Limit::perMinutes(10, 10)->by(($request->user()?->id ?? 'guest').'|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('admin.audit.export', fn (Request $request) => [
+            Limit::perMinutes(10, 3)->by(($request->user()?->id ?? 'guest').'|'.$request->ip()),
+        ]);
     }
 }

@@ -43,7 +43,7 @@ class PlatformSettingsService
                 ])
                 ->all();
 
-            return array_replace_recursive($defaults, $stored);
+            return $this->mergeSettings($defaults, $stored);
         });
     }
 
@@ -188,6 +188,32 @@ class PlatformSettingsService
     {
         Cache::forget('platform_settings:all');
         Cache::forget("platform_settings:{$group}");
+    }
+
+    protected function mergeSettings(array $defaults, array $stored): array
+    {
+        foreach ($stored as $key => $value) {
+            if (
+                array_key_exists($key, $defaults)
+                && is_array($defaults[$key])
+                && is_array($value)
+                && array_is_list($defaults[$key])
+            ) {
+                $defaults[$key] = $value;
+
+                continue;
+            }
+
+            if (array_key_exists($key, $defaults) && is_array($defaults[$key]) && is_array($value)) {
+                $defaults[$key] = $this->mergeSettings($defaults[$key], $value);
+
+                continue;
+            }
+
+            $defaults[$key] = $value;
+        }
+
+        return $defaults;
     }
 
     protected function ensureKnownGroup(string $group): void

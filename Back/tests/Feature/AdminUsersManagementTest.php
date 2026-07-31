@@ -67,8 +67,9 @@ class AdminUsersManagementTest extends TestCase
             ->assertJsonPath('data.users.data.0.role', 'subscriber')
             ->assertJsonPath('data.users.data.0.subscription_status', 'active')
             ->assertJsonPath('data.users.data.0.email_verified', true)
-            ->assertJsonPath('data.users.data.0.phone_mfa_completed', true)
+            ->assertJsonPath('data.users.data.0.mfa_completed', true)
             ->assertJsonPath('data.users.meta.per_page', 5)
+            ->assertJsonMissingPath('data.users.data.0.phone_mfa_completed')
             ->assertJsonMissingPath('data.users.data.0.password')
             ->assertJsonMissingPath('data.users.data.0.otp_code')
             ->assertJsonMissingPath('data.users.data.0.phone_mfa_code');
@@ -93,6 +94,84 @@ class AdminUsersManagementTest extends TestCase
             ->assertJsonMissingPath('data.user.password')
             ->assertJsonMissingPath('data.user.password_reset_otp_code')
             ->assertJsonMissingPath('data.user.phone_mfa_code');
+    }
+
+    public function test_admin_user_resource_returns_member_impact_fields_and_defaults_without_n_plus_one(): void
+    {
+        $admin = $this->userWithRole('admin', 'admin@test.com', true);
+        $subscriber = $this->seedUserDetailsFixture($admin);
+        $emptySubscriber = $this->userWithRole('subscriber', 'empty@test.com', true, [
+            'full_name' => 'Empty Member',
+        ]);
+
+        $organization = OrganizationProfile::query()->firstOrFail();
+        $article = Article::query()->firstOrFail();
+
+        DB::table('article_reads')->insert([
+            [
+                'article_id' => $article->id,
+                'user_id' => $subscriber->id,
+                'read_percent' => 100,
+                'reading_seconds' => 120,
+                'points_earned' => 5,
+                'counted_for_payout' => true,
+                'created_at' => now()->subDays(3),
+            ],
+            [
+                'article_id' => $article->id,
+                'user_id' => $subscriber->id,
+                'read_percent' => 20,
+                'reading_seconds' => 5,
+                'points_earned' => 0,
+                'counted_for_payout' => false,
+                'created_at' => now()->subDays(2),
+            ],
+        ]);
+
+        DB::table('impact_transactions')->insert([
+            [
+                'public_id' => (string) str()->uuid(),
+                'user_id' => $subscriber->id,
+                'organization_profile_id' => $organization->id,
+                'article_id' => $article->id,
+                'amount' => '1.25',
+                'points_generated' => 5,
+                'transaction_month' => now()->startOfMonth()->toDateString(),
+                'created_at' => now()->subDays(3),
+            ],
+            [
+                'public_id' => (string) str()->uuid(),
+                'user_id' => $subscriber->id,
+                'organization_profile_id' => $organization->id,
+                'article_id' => $article->id,
+                'amount' => '7.43',
+                'points_generated' => 5,
+                'transaction_month' => now()->startOfMonth()->toDateString(),
+                'created_at' => now()->subDays(2),
+            ],
+        ]);
+
+        Sanctum::actingAs($admin);
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $response = $this->getJson('/api/v1/admin/users?role=subscriber&sort=name&direction=asc&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.users.data.0.public_id', $emptySubscriber->public_id)
+            ->assertJsonPath('data.users.data.0.articles_read', 0)
+            ->assertJsonPath('data.users.data.0.total_impact', '0.00')
+            ->assertJsonPath('data.users.data.1.public_id', $subscriber->public_id)
+            ->assertJsonPath('data.users.data.1.articles_read', 2)
+            ->assertJsonPath('data.users.data.1.total_impact', '8.75')
+            ->assertJsonPath('data.users.data.1.email', 'member@test.com')
+            ->assertJsonPath('data.users.data.1.subscription_status', 'active')
+            ->assertJsonMissingPath('data.users.data.1.password');
+
+        $this->assertLessThanOrEqual(6, count(DB::getQueryLog()));
+        $this->assertSame(['articles_read', 'total_impact'], array_values(array_intersect(
+            ['articles_read', 'total_impact'],
+            array_keys($response->json('data.users.data.1')),
+        )));
     }
 
     public function test_admin_can_suspend_activate_reset_mfa_send_password_reset_and_revoke_tokens(): void
@@ -129,7 +208,8 @@ class AdminUsersManagementTest extends TestCase
 
         $this->postJson("/api/v1/admin/users/{$subscriber->public_id}/reset-mfa")
             ->assertOk()
-            ->assertJsonPath('data.user.phone_mfa_completed', false);
+            ->assertJsonPath('data.user.mfa_completed', false)
+            ->assertJsonMissingPath('data.user.phone_mfa_completed');
         $this->assertNull($subscriber->refresh()->first_login_mfa_completed_at);
 
         $this->deleteJson("/api/v1/admin/users/{$subscriber->public_id}/tokens")
@@ -160,6 +240,43 @@ class AdminUsersManagementTest extends TestCase
         Sanctum::actingAs($this->userWithRole('subscriber', 'member@test.com', true));
 
         $this->getJson('/api/v1/admin/users')->assertForbidden();
+    }
+
+    public function test_admin_user_resource_mfa_completed_uses_first_login_mfa_completion_only(): void
+    {
+        $admin = $this->userWithRole('admin', 'admin@test.com', true);
+        $emailOnly = $this->userWithRole('subscriber', 'email-only@test.com', false, [
+            'full_name' => 'Email Only',
+            'email_verified_at' => now(),
+            'phone' => '+15550000002',
+            'is_active' => true,
+            'first_login_mfa_completed_at' => null,
+        ]);
+        $phoneOnly = $this->userWithRole('subscriber', 'phone-only@test.com', false, [
+            'full_name' => 'Phone Only',
+            'email_verified_at' => null,
+            'phone' => '+15550000003',
+            'is_active' => true,
+            'first_login_mfa_completed_at' => null,
+        ]);
+        $completed = $this->userWithRole('subscriber', 'completed@test.com', true, [
+            'full_name' => 'Completed Member',
+            'first_login_mfa_completed_at' => now()->subHour(),
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/v1/admin/users?role=subscriber&sort=name&direction=asc&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.users.data.0.public_id', $completed->public_id)
+            ->assertJsonPath('data.users.data.0.mfa_completed', true)
+            ->assertJsonMissingPath('data.users.data.0.phone_mfa_completed')
+            ->assertJsonPath('data.users.data.1.public_id', $emailOnly->public_id)
+            ->assertJsonPath('data.users.data.1.email_verified', true)
+            ->assertJsonPath('data.users.data.1.mfa_completed', false)
+            ->assertJsonPath('data.users.data.2.public_id', $phoneOnly->public_id)
+            ->assertJsonPath('data.users.data.2.phone', '+15550000003')
+            ->assertJsonPath('data.users.data.2.mfa_completed', false);
     }
 
     private function seedUserDetailsFixture(User $admin): User

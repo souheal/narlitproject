@@ -153,6 +153,166 @@ class AdminPlatformSettingsTest extends TestCase
             ->assertJsonPath('data.settings.transactional_emails.phone_mfa', false);
     }
 
+    public function test_subscription_plan_validation_accepts_valid_enabled_monthly_and_yearly_plans(): void
+    {
+        Sanctum::actingAs($this->userWithRole('admin', 'admin@test.com'));
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [
+                $this->subscriptionPlan('monthly', 'Monthly', 'monthly', '7.00', 'price_123abc'),
+                $this->subscriptionPlan('yearly', 'Yearly', 'yearly', '96.00', 'price_456def'),
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.settings.plans.0.key', 'monthly')
+            ->assertJsonPath('data.settings.plans.1.key', 'yearly');
+
+        $this->assertDatabaseHas('platform_settings', [
+            'key' => 'subscription_plans.plans',
+            'group' => 'subscription_plans',
+        ]);
+    }
+
+    public function test_subscription_plan_validation_rejects_empty_and_all_disabled_plans(): void
+    {
+        Sanctum::actingAs($this->userWithRole('admin', 'admin@test.com'));
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [],
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['plans']);
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [
+                $this->subscriptionPlan('monthly', enabled: false, stripePriceId: null),
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['plans']);
+    }
+
+    public function test_subscription_plan_validation_rejects_duplicate_keys_and_invalid_key_format(): void
+    {
+        Sanctum::actingAs($this->userWithRole('admin', 'admin@test.com'));
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [
+                $this->subscriptionPlan('monthly', stripePriceId: 'price_123abc'),
+                $this->subscriptionPlan('monthly', stripePriceId: 'price_456def'),
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['plans.1.key']);
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [
+                $this->subscriptionPlan('Monthly Plan'),
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['plans.0.key']);
+    }
+
+    public function test_subscription_plan_validation_rejects_invalid_billing_interval(): void
+    {
+        Sanctum::actingAs($this->userWithRole('admin', 'admin@test.com'));
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [
+                $this->subscriptionPlan('monthly', billingInterval: 'week'),
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['plans.0.billing_interval'])
+            ->assertJsonFragment(['The billing interval must be monthly or yearly.']);
+    }
+
+    public function test_subscription_plan_validation_rejects_invalid_prices(): void
+    {
+        Sanctum::actingAs($this->userWithRole('admin', 'admin@test.com'));
+
+        foreach (['-1', '7.123', '$7.00', '1,000.00'] as $price) {
+            $this->putJson('/api/v1/admin/settings/subscription_plans', [
+                'plans' => [
+                    $this->subscriptionPlan('monthly', displayPrice: $price),
+                ],
+            ])
+                ->assertStatus(422)
+                ->assertJsonValidationErrors(['plans.0.display_price']);
+        }
+    }
+
+    public function test_subscription_plan_validation_rejects_invalid_stripe_price_ids_and_duplicates(): void
+    {
+        Sanctum::actingAs($this->userWithRole('admin', 'admin@test.com'));
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [
+                $this->subscriptionPlan('monthly', stripePriceId: 'bad_price'),
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['plans.0.stripe_price_id'])
+            ->assertJsonFragment(['The Stripe Price ID must be a valid Stripe price identifier.']);
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [
+                $this->subscriptionPlan('monthly', stripePriceId: 'price_123abc'),
+                $this->subscriptionPlan('yearly', 'Yearly', 'yearly', '96.00', 'price_123abc'),
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['plans.1.stripe_price_id']);
+    }
+
+    public function test_subscription_plan_validation_rejects_enabled_plan_without_stripe_price_id_but_allows_disabled_draft(): void
+    {
+        Sanctum::actingAs($this->userWithRole('admin', 'admin@test.com'));
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [
+                $this->subscriptionPlan('monthly', stripePriceId: null),
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['plans.0.stripe_price_id'])
+            ->assertJsonFragment(['An enabled subscription plan must have a Stripe Price ID.']);
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [
+                $this->subscriptionPlan('monthly', stripePriceId: 'price_123abc'),
+                $this->subscriptionPlan('draft', 'Draft', 'monthly', '0.00', null, false),
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.settings.plans.1.enabled', false)
+            ->assertJsonPath('data.settings.plans.1.stripe_price_id', null);
+    }
+
+    public function test_invalid_subscription_plan_settings_are_not_persisted(): void
+    {
+        Sanctum::actingAs($this->userWithRole('admin', 'admin@test.com'));
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [
+                $this->subscriptionPlan('monthly', displayPrice: '7.00', stripePriceId: 'price_123abc'),
+            ],
+        ])->assertOk();
+
+        $this->putJson('/api/v1/admin/settings/subscription_plans', [
+            'plans' => [
+                $this->subscriptionPlan('bad plan', displayPrice: '$99.00', stripePriceId: 'bad_price'),
+            ],
+        ])->assertStatus(422);
+
+        $stored = DB::table('platform_settings')->where('key', 'subscription_plans.plans')->value('value');
+
+        $this->assertIsString($stored);
+        $this->assertStringContainsString('price_123abc', $stored);
+        $this->assertStringNotContainsString('bad_price', $stored);
+    }
+
     public function test_settings_require_admin_access(): void
     {
         $this->getJson('/api/v1/admin/settings')->assertUnauthorized();
@@ -255,5 +415,24 @@ class AdminPlatformSettingsTest extends TestCase
             'first_login_mfa_completed_at' => now(),
             'failed_login_attempts' => 0,
         ]);
+    }
+
+    private function subscriptionPlan(
+        string $key,
+        string $name = 'Monthly',
+        string $billingInterval = 'monthly',
+        string $displayPrice = '7.00',
+        ?string $stripePriceId = 'price_123abc',
+        bool $enabled = true,
+    ): array {
+        return [
+            'key' => $key,
+            'name' => $name,
+            'billing_interval' => $billingInterval,
+            'display_price' => $displayPrice,
+            'stripe_price_id' => $stripePriceId,
+            'enabled' => $enabled,
+            'founding_member_cap' => null,
+        ];
     }
 }

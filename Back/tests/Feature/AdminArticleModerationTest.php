@@ -37,7 +37,11 @@ class AdminArticleModerationTest extends TestCase
             'title' => 'Clean Water Story',
             'category' => 'Health',
             'status' => 'pending_review',
+            'content' => str_repeat('word ', 401),
             'total_reads' => 12,
+            'total_unique_reads' => 7,
+            'total_points_generated' => 42,
+            'featured_at' => now()->subHour(),
             'metadata' => ['images' => ['https://example.test/water.jpg']],
         ]);
 
@@ -67,14 +71,167 @@ class AdminArticleModerationTest extends TestCase
             ->assertJsonPath('data.articles.data.0.organization.name', 'NarLit Aid')
             ->assertJsonPath('data.articles.data.0.author.email', 'org@test.com')
             ->assertJsonPath('data.articles.data.0.total_reads', 12)
+            ->assertJsonPath('data.articles.data.0.featured', true)
+            ->assertJsonPath('data.articles.data.0.is_featured', true)
+            ->assertJsonPath('data.articles.data.0.read_time_minutes', 3)
+            ->assertJsonPath('data.articles.data.0.total_unique_reads', 7)
+            ->assertJsonPath('data.articles.data.0.total_points_generated', 42)
             ->assertJsonPath('data.articles.meta.per_page', 5);
 
         $this->getJson("/api/v1/admin/articles/{$article->public_id}")
             ->assertOk()
             ->assertJsonPath('data.article.title', 'Clean Water Story')
+            ->assertJsonPath('data.article.content', str_repeat('word ', 401))
+            ->assertJsonPath('data.article.body', str_repeat('word ', 401))
             ->assertJsonPath('data.article.images.0', 'https://example.test/water.jpg')
             ->assertJsonPath('data.article.read_statistics.recorded_read_events', 1)
             ->assertJsonPath('data.article.submission_history.0.action', 'article.submitted');
+    }
+
+    public function test_admin_article_detail_returns_complete_body_for_moderation_preview(): void
+    {
+        $admin = $this->userWithRole('admin', 'admin@test.com', true);
+        $body = '<h1>Editorial title</h1><p>'.str_repeat('Complete article content ', 260).'</p><blockquote>Keep formatting.</blockquote>';
+        $article = $this->article($this->organizationProfile(), [
+            'title' => 'Long Pending Story',
+            'slug' => 'long-pending-story',
+            'status' => 'pending_review',
+            'content' => $body,
+            'excerpt' => 'Short excerpt only.',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson("/api/v1/admin/articles/{$article->public_id}")
+            ->assertOk()
+            ->assertJsonPath('data.article.public_id', $article->public_id)
+            ->assertJsonPath('data.article.title', 'Long Pending Story')
+            ->assertJsonPath('data.article.excerpt', 'Short excerpt only.')
+            ->assertJsonPath('data.article.content', $body)
+            ->assertJsonPath('data.article.body', $body)
+            ->assertJsonPath('data.article.status', 'pending_review')
+            ->assertJsonPath('data.article.organization.name', 'NarLit Aid')
+            ->assertJsonPath('data.article.read_statistics.total_reads', 0)
+            ->assertJsonPath('data.article.dates.submitted_at', $article->created_at?->toIso8601String());
+
+        $this->assertSame(strlen($body), strlen($this->getJson("/api/v1/admin/articles/{$article->public_id}")->json('data.article.body')));
+    }
+
+    public function test_admin_article_detail_returns_body_for_draft_and_rejected_articles(): void
+    {
+        $admin = $this->userWithRole('admin', 'admin@test.com', true);
+        $draft = $this->article($this->organizationProfile(), [
+            'title' => 'Draft Story',
+            'slug' => 'draft-story',
+            'status' => 'draft',
+            'content' => '<p>Draft full body.</p>',
+        ]);
+        $rejected = $this->article($this->organizationProfile('Second Org', 'second-org@test.com'), [
+            'title' => 'Rejected Story',
+            'slug' => 'rejected-story',
+            'status' => 'rejected',
+            'content' => '<p>Rejected full body.</p>',
+            'rejection_reason' => 'Needs sources.',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson("/api/v1/admin/articles/{$draft->public_id}")
+            ->assertOk()
+            ->assertJsonPath('data.article.body', '<p>Draft full body.</p>')
+            ->assertJsonPath('data.article.status', 'draft');
+
+        $this->getJson("/api/v1/admin/articles/{$rejected->public_id}")
+            ->assertOk()
+            ->assertJsonPath('data.article.body', '<p>Rejected full body.</p>')
+            ->assertJsonPath('data.article.status', 'rejected')
+            ->assertJsonPath('data.article.rejection_reason', 'Needs sources.');
+    }
+
+    public function test_admin_article_list_does_not_include_full_body_or_content(): void
+    {
+        $admin = $this->userWithRole('admin', 'admin@test.com', true);
+        $article = $this->article($this->organizationProfile(), [
+            'title' => 'Pending Story',
+            'slug' => 'pending-story-list-no-body',
+            'status' => 'pending_review',
+            'content' => '<p>Full body should only appear in detail.</p>',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/v1/admin/articles?status=pending_review&search=Pending')
+            ->assertOk()
+            ->assertJsonPath('data.articles.data.0.public_id', $article->public_id)
+            ->assertJsonMissingPath('data.articles.data.0.body')
+            ->assertJsonMissingPath('data.articles.data.0.content');
+    }
+
+    public function test_admin_article_list_resource_returns_feature_read_time_and_counter_defaults_without_n_plus_one(): void
+    {
+        $admin = $this->userWithRole('admin', 'admin@test.com', true);
+        $organization = $this->organizationProfile();
+        $featured = $this->article($organization, [
+            'title' => 'Featured HTML Story',
+            'slug' => 'featured-html-story',
+            'status' => 'published',
+            'content' => '<p>'.str_repeat('word ', 200).'</p><strong>'.str_repeat('impact ', 1).'</strong>',
+            'featured_at' => now(),
+            'published_at' => now()->subDay(),
+            'total_unique_reads' => 125,
+            'total_points_generated' => 420,
+        ]);
+        $empty = $this->article($organization, [
+            'title' => 'Empty Story',
+            'slug' => 'empty-story',
+            'status' => 'published',
+            'content' => '',
+            'featured_at' => null,
+            'published_at' => now()->subDays(2),
+            'total_unique_reads' => 0,
+            'total_points_generated' => 0,
+        ]);
+
+        Sanctum::actingAs($admin);
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->getJson('/api/v1/admin/articles?status=published&sort=title&direction=asc&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.articles.data.0.public_id', $empty->public_id)
+            ->assertJsonPath('data.articles.data.0.title', 'Empty Story')
+            ->assertJsonPath('data.articles.data.0.is_featured', false)
+            ->assertJsonPath('data.articles.data.0.read_time_minutes', 0)
+            ->assertJsonPath('data.articles.data.0.total_unique_reads', 0)
+            ->assertJsonPath('data.articles.data.0.total_points_generated', 0)
+            ->assertJsonPath('data.articles.data.1.public_id', $featured->public_id)
+            ->assertJsonPath('data.articles.data.1.is_featured', true)
+            ->assertJsonPath('data.articles.data.1.featured', true)
+            ->assertJsonPath('data.articles.data.1.read_time_minutes', 2)
+            ->assertJsonPath('data.articles.data.1.total_unique_reads', 125)
+            ->assertJsonPath('data.articles.data.1.total_points_generated', 420)
+            ->assertJsonPath('data.articles.data.1.status', 'published');
+
+        $this->assertLessThanOrEqual(5, count(DB::getQueryLog()));
+    }
+
+    public function test_admin_article_list_read_time_returns_minimum_one_for_non_empty_content(): void
+    {
+        $admin = $this->userWithRole('admin', 'admin@test.com', true);
+        $article = $this->article($this->organizationProfile(), [
+            'title' => 'Short Story',
+            'slug' => 'short-story',
+            'status' => 'pending_review',
+            'content' => '<p>Hello world</p>',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/v1/admin/articles?status=pending_review&search=Short')
+            ->assertOk()
+            ->assertJsonPath('data.articles.data.0.public_id', $article->public_id)
+            ->assertJsonPath('data.articles.data.0.is_featured', false)
+            ->assertJsonPath('data.articles.data.0.read_time_minutes', 1);
     }
 
     public function test_admin_can_approve_publish_feature_unfeature_archive_and_restore_article(): void
@@ -189,10 +346,12 @@ class AdminArticleModerationTest extends TestCase
         ]);
 
         $this->getJson('/api/v1/admin/articles')->assertUnauthorized();
+        $this->getJson("/api/v1/admin/articles/{$article->public_id}")->assertUnauthorized();
 
         Sanctum::actingAs($this->userWithRole('subscriber', 'member@test.com', true));
 
         $this->getJson('/api/v1/admin/articles')->assertForbidden();
+        $this->getJson("/api/v1/admin/articles/{$article->public_id}")->assertForbidden();
         $this->postJson("/api/v1/admin/articles/{$article->public_id}/approve")->assertForbidden();
     }
 

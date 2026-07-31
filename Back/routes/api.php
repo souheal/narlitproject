@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\Member\MemberAchievementController;
 use App\Http\Controllers\Api\Member\MemberArticleController;
 use App\Http\Controllers\Api\Member\MemberBookmarkController;
 use App\Http\Controllers\Api\Member\MemberDashboardController;
+<<<<<<< HEAD
 use App\Http\Controllers\Api\Member\MemberExploreController;
 use App\Http\Controllers\Api\Member\MemberHistoryController;
 use App\Http\Controllers\Api\Member\MemberImpactController;
@@ -39,6 +40,9 @@ use App\Http\Controllers\Api\Organization\OrganizationStripeConnectController;
 use App\Http\Controllers\Api\Public\PublicArticleController;
 use App\Http\Controllers\Api\Public\PublicOrganizationController;
 use App\Http\Controllers\Api\Public\PublicSearchController;
+=======
+use App\Http\Controllers\Api\SubscriptionPlanController;
+>>>>>>> 2ebe816874cc743bde1c98d7c1016fe19fc26961
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -74,12 +78,16 @@ Route::prefix('v1')->group(function () {
 
     Route::post('/billing/checkout', [StripeCheckoutController::class, 'store'])->middleware('throttle:billing.checkout');
     Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->middleware('throttle:billing.webhook');
+<<<<<<< HEAD
     Route::post('/contact', [ContactController::class, 'store']);
 
     Route::get('/articles/{publicId}', [PublicArticleController::class, 'show']);
     Route::get('/organizations', [PublicOrganizationController::class, 'index']);
     Route::get('/organizations/{publicId}', [PublicOrganizationController::class, 'show']);
     Route::get('/search', [PublicSearchController::class, 'index']);
+=======
+    Route::get('/subscription/plans', [SubscriptionPlanController::class, 'index']);
+>>>>>>> 2ebe816874cc743bde1c98d7c1016fe19fc26961
 
     Route::middleware(['auth:sanctum', 'narlit.user.access'])->prefix('member')->group(function () {
         Route::get('/dashboard', [MemberDashboardController::class, 'show']);
@@ -133,15 +141,26 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware(['auth:sanctum', 'narlit.admin'])->prefix('admin')->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'show']);
+<<<<<<< HEAD
         Route::get('/overview', [AdminDashboardController::class, 'overview']);
         Route::get('/analytics', [AdminAnalyticsController::class, 'combined']);
         Route::get('/audit', [AdminAuditLogController::class, 'index']);
         Route::get('/audit-logs/export', [AdminAuditLogController::class, 'export']);
+=======
+        Route::get('/analytics/overview', [AdminAnalyticsController::class, 'overview']);
+        Route::get('/analytics/timeseries', [AdminAnalyticsController::class, 'timeseries']);
+        Route::get('/analytics/top-organizations', [AdminAnalyticsController::class, 'topOrganizations']);
+        Route::get('/analytics/top-articles', [AdminAnalyticsController::class, 'topArticles']);
+        Route::get('/analytics/categories', [AdminAnalyticsController::class, 'categories']);
+        Route::get('/analytics/funnel', [AdminAnalyticsController::class, 'funnel']);
+        Route::get('/analytics/cohorts', [AdminAnalyticsController::class, 'cohorts']);
+        Route::get('/audit-logs/export', [AdminAuditLogController::class, 'export'])->middleware('throttle:admin.audit.export');
+>>>>>>> 2ebe816874cc743bde1c98d7c1016fe19fc26961
         Route::get('/audit-logs', [AdminAuditLogController::class, 'index']);
         Route::get('/audit-logs/{id}', [AdminAuditLogController::class, 'show']);
         Route::get('/settings', [AdminPlatformSettingsController::class, 'index']);
         Route::get('/settings/{group}', [AdminPlatformSettingsController::class, 'show']);
-        Route::put('/settings/{group}', [AdminPlatformSettingsController::class, 'update']);
+        Route::put('/settings/{group}', [AdminPlatformSettingsController::class, 'update'])->middleware('throttle:admin.sensitive');
         Route::get('/articles', [AdminArticleModerationController::class, 'index']);
         Route::get('/articles/{publicId}', [AdminArticleModerationController::class, 'show']);
         Route::post('/articles/{publicId}/approve', [AdminArticleModerationController::class, 'approve']);
@@ -156,18 +175,29 @@ Route::prefix('v1')->group(function () {
         Route::get('/subscriptions/metrics', [AdminSubscriptionRevenueController::class, 'metrics']);
         Route::get('/subscriptions', [AdminSubscriptionRevenueController::class, 'index']);
         Route::get('/subscriptions/{publicId}', [AdminSubscriptionRevenueController::class, 'show']);
+<<<<<<< HEAD
         Route::post('/subscriptions/{publicId}/cancel', [AdminSubscriptionRevenueController::class, 'cancel']);
         Route::post('/subscriptions/{publicId}/refund', [AdminSubscriptionRevenueController::class, 'refundSubscription']);
         Route::post('/payments/{publicId}/refund', [AdminSubscriptionRevenueController::class, 'refund']);
+=======
+        Route::post('/subscriptions/{publicId}/cancel', [AdminSubscriptionRevenueController::class, 'cancel'])->middleware('throttle:admin.sensitive');
+        Route::post('/payments/{publicId}/refund', [AdminSubscriptionRevenueController::class, 'refund'])->middleware('throttle:admin.sensitive');
+>>>>>>> 2ebe816874cc743bde1c98d7c1016fe19fc26961
         Route::get('/payouts/summary', [AdminPayoutController::class, 'summary']);
         Route::get('/payouts', [AdminPayoutController::class, 'index']);
-        Route::post('/payouts/generate', [AdminPayoutController::class, 'generate']);
+        Route::post('/payouts/generate', [AdminPayoutController::class, 'generate'])->middleware('throttle:admin.sensitive');
         Route::get('/payouts/{publicId}', [AdminPayoutController::class, 'show']);
+<<<<<<< HEAD
         Route::get('/payouts/{publicId}/items', [AdminPayoutController::class, 'items']);
         Route::post('/payouts/{publicId}/execute', [AdminPayoutController::class, 'execute']);
         Route::post('/payout-items/{id}/retry', [AdminPayoutController::class, 'retryItem']);
         Route::post('/payouts/items/{id}/retry', [AdminPayoutController::class, 'retryItem']);
         Route::post('/payouts/{publicId}/cancel', [AdminPayoutController::class, 'cancel']);
+=======
+        Route::post('/payouts/{publicId}/execute', [AdminPayoutController::class, 'execute'])->middleware('throttle:admin.sensitive');
+        Route::post('/payout-items/{id}/retry', [AdminPayoutController::class, 'retryItem'])->middleware('throttle:admin.sensitive');
+        Route::post('/payouts/{publicId}/cancel', [AdminPayoutController::class, 'cancel'])->middleware('throttle:admin.sensitive');
+>>>>>>> 2ebe816874cc743bde1c98d7c1016fe19fc26961
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::get('/users/{publicId}', [AdminUserController::class, 'show']);
         Route::post('/users/{publicId}/suspend', [AdminUserController::class, 'suspend']);

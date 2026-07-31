@@ -24,7 +24,12 @@ class AdminUserService
             ->select('users.*')
             ->join('roles', 'roles.id', '=', 'users.role_id')
             ->addSelect('roles.name as role_name')
-            ->selectSub($this->latestSubscriptionStatusSubquery(), 'subscription_status');
+            ->selectSub($this->latestSubscriptionStatusSubquery(), 'subscription_status')
+            ->withCount([
+                'articleReads as completed_article_reads_count' => fn (Builder $read): Builder => $read
+                    ->where('counted_for_payout', true),
+            ])
+            ->withSum('impactTransactions as impact_amount_sum', 'amount');
 
         $this->applyFilters($query, $request);
         $this->applySorting($query, $request);
@@ -42,6 +47,13 @@ class AdminUserService
                 'latestSubscriptionForAdmin',
                 'paymentsForAdmin',
             ])
+            ->withCount([
+                'articleReads as article_reads_count',
+                'articleReads as completed_article_reads_count' => fn (Builder $read): Builder => $read
+                    ->where('counted_for_payout', true),
+            ])
+            ->withSum('articleReads as article_reads_points_sum', 'points_earned')
+            ->withSum('impactTransactions as impact_amount_sum', 'amount')
             ->where('users.public_id', $publicId)
             ->first();
 
@@ -61,10 +73,6 @@ class AdminUserService
             ->where('user_id', $user->id)
             ->where('status', 'failed')
             ->count());
-        $user->setAttribute('article_reads_count', DB::table('article_reads')->where('user_id', $user->id)->count());
-        $user->setAttribute('completed_article_reads_count', DB::table('article_reads')->where('user_id', $user->id)->where('counted_for_payout', true)->count());
-        $user->setAttribute('article_reads_points_sum', DB::table('article_reads')->where('user_id', $user->id)->sum('points_earned'));
-        $user->setAttribute('impact_amount_sum', DB::table('impact_transactions')->where('user_id', $user->id)->sum('amount'));
         $user->setAttribute('organizations_supported_count', DB::table('impact_transactions')->where('user_id', $user->id)->distinct('organization_profile_id')->count('organization_profile_id'));
         $user->setAttribute('admin_action_history', DB::table('admin_logs')
             ->join('users as admins', 'admins.id', '=', 'admin_logs.admin_id')
@@ -110,6 +118,10 @@ class AdminUserService
     {
         $target = $this->findUser($publicId);
 
+        if ($target->id === $admin->id) {
+            throw new ApiException('You cannot reset MFA for your own active admin session.', 422);
+        }
+
         return DB::transaction(function () use ($admin, $target, $request): User {
             $target->forceFill([
                 'phone_mfa_code' => null,
@@ -127,6 +139,10 @@ class AdminUserService
     public function revokeTokens(User $admin, string $publicId, Request $request): int
     {
         $target = $this->findUser($publicId);
+
+        if ($target->id === $admin->id) {
+            throw new ApiException('You cannot revoke tokens for your own active admin session.', 422);
+        }
 
         return DB::transaction(function () use ($admin, $target, $request): int {
             $count = $target->tokens()->count();
