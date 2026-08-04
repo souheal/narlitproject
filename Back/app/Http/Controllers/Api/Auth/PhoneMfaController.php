@@ -12,6 +12,7 @@ use App\Services\Auth\PhoneMfaService;
 use App\Services\Billing\SubscriptionService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpFoundation\Cookie;
 
 class PhoneMfaController extends Controller
 {
@@ -21,32 +22,45 @@ class PhoneMfaController extends Controller
         protected PhoneMfaService $phoneMfaService,
         protected LoginService $loginService,
         protected SubscriptionService $subscriptionService,
-    ) {
-    }
+    ) {}
 
     public function verify(VerifyPhoneMfaRequest $request): JsonResponse
     {
         $user = $this->resolveEligibleUser($request->validated('email'));
         $result = $this->loginService->completePhoneMfa($user, $request->validated('code'), $request);
 
-        return $this->success('Login successful.', [
+        $isAdmin = $this->loginService->isAdmin($result['user']);
+
+        $data = [
             'user' => [
                 'public_id' => $result['user']->public_id,
                 'full_name' => $result['user']->full_name,
                 'username' => $result['user']->username,
                 'email' => $result['user']->email,
             ],
-            'token' => $result['token'],
+            'token' => $isAdmin ? null : $result['token'],
             'token_type' => 'Bearer',
             'next_step' => 'completed',
-        ]);
+        ];
+
+        if ($isAdmin) {
+            $data['mfa_enrolled'] = $result['user']->hasCompletedMfaEnrollment();
+        }
+
+        $response = $this->success($isAdmin ? 'Phone verification completed.' : 'Login successful.', $data);
+
+        if ($isAdmin) {
+            $response->withCookie($this->adminTokenCookie($result['token']));
+        }
+
+        return $response;
     }
 
     public function resend(ResendPhoneMfaRequest $request): JsonResponse
     {
         $user = $this->resolveEligibleUser($request->validated('email'));
 
-        if ($user->first_login_mfa_completed_at !== null) {
+        if (! $user->isAdminAccount() && $user->first_login_mfa_completed_at !== null) {
             throw new ApiException('Phone verification has already been completed.', 409);
         }
 
@@ -76,10 +90,33 @@ class PhoneMfaController extends Controller
             throw new ApiException('Please verify your email before continuing.', 403);
         }
 
+        if ($user->isAdminAccount()) {
+            if (! $user->is_active) {
+                throw new ApiException('Admin account is not active.', 403);
+            }
+
+            return $user;
+        }
+
         if (! $user->is_active || ! $this->subscriptionService->userHasRequiredAccess($user)) {
             throw new ApiException('Please complete your subscription before logging in.', 403);
         }
 
         return $user;
+    }
+
+    protected function adminTokenCookie(string $token): Cookie
+    {
+        return cookie()->make(
+            name: 'admin_token',
+            value: $token,
+            minutes: $this->loginService->adminTokenTtlMinutes(),
+            path: '/',
+            domain: null,
+            secure: true,
+            httpOnly: true,
+            raw: false,
+            sameSite: 'strict',
+        );
     }
 }

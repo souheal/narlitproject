@@ -54,6 +54,51 @@ In order to ensure that the Laravel community is welcoming to all, please review
 
 If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
 
+## Stripe Webhooks
+
+The Stripe webhook endpoint is:
+
+```text
+POST /api/v1/stripe/webhook
+```
+
+Set the matching signing secret for each environment:
+
+```env
+STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxx
+```
+
+For local testing, use the Stripe CLI:
+
+```bash
+stripe login
+stripe listen --forward-to http://127.0.0.1:8000/api/v1/stripe/webhook
+```
+
+Copy the `whsec_...` signing secret printed by `stripe listen` into the local `.env`, then run:
+
+```bash
+php artisan optimize:clear
+```
+
+The Stripe CLI signing secret is different from a Dashboard webhook endpoint secret. Each environment must use the signing secret that belongs to that exact endpoint. Localhost cannot be registered directly as a public Dashboard webhook endpoint.
+
+## Admin Idempotency
+
+Sensitive admin financial operations require an idempotency header:
+
+```http
+Idempotency-Key: <uuid>
+```
+
+The frontend should generate a new UUID with `crypto.randomUUID()` for each intentional refund, subscription cancellation, payout generation, or payout execution. If the same logical request is retried after a timeout or network failure, reuse the same UUID. A new intentional operation must use a new UUID.
+
+Completed idempotency records expire after `IDEMPOTENCY_TTL_HOURS`, defaulting to 24 hours, and can be cleaned up with:
+
+```bash
+php artisan idempotency:cleanup
+```
+
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).

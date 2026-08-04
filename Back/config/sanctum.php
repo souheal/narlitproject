@@ -12,6 +12,7 @@ return [
         Sanctum::currentApplicationUrlWithPort(),
     ))),
     'guard' => ['web'],
+    // Token lifetimes are assigned per role through personal_access_tokens.expires_at.
     'expiration' => null,
     'token_prefix' => env('SANCTUM_TOKEN_PREFIX', ''),
     'middleware' => [

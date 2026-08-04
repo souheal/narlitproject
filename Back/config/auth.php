@@ -116,4 +116,10 @@ return [
 
     'otp_expires_minutes' => (int) env('AUTH_OTP_EXPIRES_MINUTES', 10),
 
+    'admin_token_ttl' => (int) env('ADMIN_TOKEN_TTL_MINUTES', 240),
+
+    'user_token_ttl' => (int) env('AUTH_TOKEN_TTL_MINUTES', 43200),
+
+    'idempotency_ttl_hours' => (int) env('IDEMPOTENCY_TTL_HOURS', 24),
+
 ];

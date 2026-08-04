@@ -164,7 +164,12 @@ class AdminPayoutService
         }
 
         DB::transaction(function () use ($admin, $batch, $request): void {
-            $batch->forceFill(['status' => 'processing'])->save();
+            $batch->forceFill([
+                'status' => 'processing',
+                'metadata' => array_merge($batch->metadata ?? [], [
+                    'execution_idempotency_key' => $request->attributes->get('stripe_idempotency_key'),
+                ]),
+            ])->save();
             $this->log($admin, 'payout_batch', $batch->public_id, 'payout_batch.execution_queued', $request);
         }, 3);
 
@@ -275,7 +280,7 @@ class AdminPayoutService
 
     protected function processItem(PayoutItem $item): void
     {
-        $item = PayoutItem::query()->with('organizationProfile')->whereKey($item->id)->lockForUpdate()->first();
+        $item = PayoutItem::query()->with(['batch', 'organizationProfile'])->whereKey($item->id)->lockForUpdate()->first();
 
         if ($item === null || $item->transfer_status !== 'pending') {
             return;
@@ -313,7 +318,7 @@ class AdminPayoutService
                         'payout_batch_id' => (string) $item->payout_batch_id,
                     ],
                 ], [
-                    'idempotency_key' => "payout-item-{$item->id}",
+                    'idempotency_key' => $this->payoutTransferIdempotencyKey($item),
                 ]);
 
             $item->forceFill([
@@ -339,6 +344,17 @@ class AdminPayoutService
                 'failed_at' => now()->toIso8601String(),
             ]),
         ])->save();
+    }
+
+    protected function payoutTransferIdempotencyKey(PayoutItem $item): string
+    {
+        $executionKey = $item->batch?->metadata['execution_idempotency_key'] ?? null;
+
+        if (is_string($executionKey) && $executionKey !== '') {
+            return "{$executionKey}-item-{$item->id}";
+        }
+
+        return "payout-item-{$item->id}";
     }
 
     protected function calculate(Carbon $batchMonth): array

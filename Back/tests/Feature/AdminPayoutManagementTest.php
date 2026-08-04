@@ -49,7 +49,7 @@ class AdminPayoutManagementTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/v1/admin/payouts/generate', [
+        $this->withHeader('Idempotency-Key', (string) str()->uuid())->postJson('/api/v1/admin/payouts/generate', [
             'month' => '2026-07',
             'preview' => true,
         ])
@@ -61,7 +61,7 @@ class AdminPayoutManagementTest extends TestCase
             ->assertJsonPath('data.calculation.items.0.payout_amount', '19.80')
             ->assertJsonPath('data.calculation.items.1.payout_amount', '9.90');
 
-        $response = $this->postJson('/api/v1/admin/payouts/generate', [
+        $response = $this->withHeader('Idempotency-Key', (string) str()->uuid())->postJson('/api/v1/admin/payouts/generate', [
             'month' => '2026-07',
         ])
             ->assertCreated()
@@ -98,7 +98,7 @@ class AdminPayoutManagementTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/v1/admin/payouts/generate', [
+        $this->withHeader('Idempotency-Key', (string) str()->uuid())->postJson('/api/v1/admin/payouts/generate', [
             'month' => '2026-07',
         ])
             ->assertStatus(409)
@@ -139,7 +139,7 @@ class AdminPayoutManagementTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson("/api/v1/admin/payouts/{$batch->public_id}/execute")
+        $this->withHeader('Idempotency-Key', (string) str()->uuid())->postJson("/api/v1/admin/payouts/{$batch->public_id}/execute")
             ->assertOk()
             ->assertJsonPath('data.payout_batch.status', 'failed');
 
@@ -154,7 +154,9 @@ class AdminPayoutManagementTest extends TestCase
             'payouts_enabled' => true,
         ])->save();
 
-        $this->postJson("/api/v1/admin/payout-items/{$missingItem->id}/retry")
+        $this->postJson("/api/v1/admin/payout-items/{$missingItem->id}/retry")->assertNotFound();
+
+        $this->postJson("/api/v1/admin/payouts/items/{$missingItem->id}/retry")
             ->assertOk()
             ->assertJsonPath('data.payout_item.transfer_status', 'completed');
 
@@ -223,6 +225,7 @@ class AdminPayoutManagementTest extends TestCase
     private function createTestSchema(): void
     {
         Schema::dropIfExists('admin_logs');
+        Schema::dropIfExists('idempotency_keys');
         Schema::dropIfExists('payout_items');
         Schema::dropIfExists('payout_batches');
         Schema::dropIfExists('article_reads');
@@ -267,6 +270,27 @@ class AdminPayoutManagementTest extends TestCase
             $table->timestamp('last_used_at')->nullable();
             $table->timestamp('expires_at')->nullable();
             $table->timestamps();
+        });
+
+        Schema::create('idempotency_keys', function (Blueprint $table): void {
+            $table->id();
+            $table->uuid('key');
+            $table->foreignId('actor_id')->constrained('users')->restrictOnDelete();
+            $table->string('operation');
+            $table->string('request_method', 10);
+            $table->string('request_path_hash', 64);
+            $table->string('request_fingerprint', 64);
+            $table->string('status', 32);
+            $table->unsignedSmallInteger('response_status')->nullable();
+            $table->json('response_body')->nullable();
+            $table->string('resource_type')->nullable();
+            $table->string('resource_id')->nullable();
+            $table->timestamp('locked_at')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->timestamp('failed_at')->nullable();
+            $table->timestamp('expires_at');
+            $table->timestamps();
+            $table->unique(['actor_id', 'key']);
         });
 
         Schema::create('organization_profiles', function (Blueprint $table): void {

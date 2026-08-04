@@ -1,9 +1,13 @@
 <?php
 
-use App\Exceptions\ApiException;
+use App\Console\Commands\CleanupIdempotencyKeys;
 use App\Console\Commands\ImportIrsExemptOrganizations;
+use App\Exceptions\ApiException;
 use App\Http\Middleware\EnsureAdminAccess;
+use App\Http\Middleware\EnsureIdempotency;
 use App\Http\Middleware\EnsureNarLitUserAccess;
+use App\Http\Middleware\EnsurePermission;
+use App\Http\Middleware\UseAdminTokenCookieForSanctum;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -11,6 +15,9 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Exceptions\UnauthorizedException;
+use Spatie\Permission\Middleware\RoleMiddleware;
+use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -20,19 +27,27 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withCommands([
+        CleanupIdempotencyKeys::class,
         ImportIrsExemptOrganizations::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
+        $middleware->api(prepend: [
+            UseAdminTokenCookieForSanctum::class,
+        ]);
         $middleware->throttleApi('api');
         $middleware->alias([
             'narlit.admin' => EnsureAdminAccess::class,
             'narlit.user.access' => EnsureNarLitUserAccess::class,
+            'idempotency' => EnsureIdempotency::class,
+            'permission' => EnsurePermission::class,
+            'role' => RoleMiddleware::class,
+            'role_or_permission' => RoleOrPermissionMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request, \Throwable $throwable): bool => $request->is('api/*') || $request->expectsJson()
+            fn (Request $request, Throwable $throwable): bool => $request->is('api/*') || $request->expectsJson()
         );
 
         $exceptions->render(function (ApiException $exception, Request $request) {
@@ -63,6 +78,13 @@ return Application::configure(basePath: dirname(__DIR__))
             return response()->json([
                 'message' => 'Too many requests. Please try again later.',
                 'errors' => [],
-            ], 429);
+            ], 429)->withHeaders($exception->getHeaders());
+        });
+
+        $exceptions->render(function (UnauthorizedException $exception, Request $request) {
+            return response()->json([
+                'message' => 'You do not have permission to perform this action.',
+                'errors' => [],
+            ], 403);
         });
     })->create();

@@ -124,7 +124,7 @@ class AdminSubscriptionRevenueService
             return $subscription;
         }
 
-        $stripeSubscription = $this->cancelInStripe($subscription);
+        $stripeSubscription = $this->cancelInStripe($subscription, $request);
 
         return DB::transaction(function () use ($admin, $subscription, $stripeSubscription, $request): Subscription {
             $subscription->forceFill([
@@ -168,7 +168,7 @@ class AdminSubscriptionRevenueService
             throw new ApiException('Only paid payments can be refunded.', 422);
         }
 
-        $refund = $this->refundInStripe($payment, $reason);
+        $refund = $this->refundInStripe($payment, $reason, $request);
 
         return DB::transaction(function () use ($admin, $payment, $refund, $reason, $request): Payment {
             $payment->forceFill([
@@ -307,7 +307,7 @@ class AdminSubscriptionRevenueService
             ->count('user_id');
     }
 
-    protected function cancelInStripe(Subscription $subscription): object
+    protected function cancelInStripe(Subscription $subscription, Request $request): object
     {
         if ((bool) config('services.stripe.fake_checkout', false)) {
             return (object) [
@@ -317,10 +317,14 @@ class AdminSubscriptionRevenueService
             ];
         }
 
-        return $this->client()->subscriptions->cancel($subscription->stripe_subscription_id, []);
+        return $this->client()->subscriptions->cancel(
+            $subscription->stripe_subscription_id,
+            [],
+            $this->stripeRequestOptions($request, "admin-subscription-cancel-{$subscription->public_id}")
+        );
     }
 
-    protected function refundInStripe(Payment $payment, string $reason): object
+    protected function refundInStripe(Payment $payment, string $reason, Request $request): object
     {
         if ((bool) config('services.stripe.fake_checkout', false)) {
             return (object) [
@@ -336,9 +340,16 @@ class AdminSubscriptionRevenueService
                 'admin_reason' => $reason,
                 'payment_public_id' => $payment->public_id,
             ],
-        ], [
-            'idempotency_key' => "admin-refund-{$payment->public_id}",
-        ]);
+        ], $this->stripeRequestOptions($request, "admin-refund-{$payment->public_id}"));
+    }
+
+    protected function stripeRequestOptions(Request $request, string $fallback): array
+    {
+        $key = $request->attributes->get('stripe_idempotency_key');
+
+        return [
+            'idempotency_key' => is_string($key) && $key !== '' ? $key : $fallback,
+        ];
     }
 
     protected function client(): StripeClient

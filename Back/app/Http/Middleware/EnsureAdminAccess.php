@@ -5,7 +5,7 @@ namespace App\Http\Middleware;
 use App\Exceptions\ApiException;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureAdminAccess
@@ -18,9 +18,7 @@ class EnsureAdminAccess
             throw new ApiException('Authentication is required.', 401);
         }
 
-        $roleName = DB::table('roles')->where('id', $user->role_id)->value('name');
-
-        if ($roleName !== 'admin') {
+        if (! $user->isAdminAccount()) {
             throw new ApiException('Admin access is required.', 403);
         }
 
@@ -28,8 +26,19 @@ class EnsureAdminAccess
             throw new ApiException('Admin account is not active.', 403);
         }
 
-        if ($user->first_login_mfa_completed_at === null) {
-            throw new ApiException('Admin MFA verification is required.', 403);
+        if (! $user->hasCompletedMfaEnrollment()) {
+            $token = $user->currentAccessToken();
+
+            if ($token instanceof PersonalAccessToken) {
+                $token->delete();
+            }
+
+            return response()->json([
+                'message' => 'Administrator MFA enrollment is required.',
+                'data' => [
+                    'next_step' => 'mfa_enrollment_required',
+                ],
+            ], 403);
         }
 
         return $next($request);

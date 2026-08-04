@@ -8,6 +8,7 @@ use App\Services\Auth\LoginService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Cookie;
 
 class LoginController extends Controller
 {
@@ -15,8 +16,7 @@ class LoginController extends Controller
 
     public function __construct(
         protected LoginService $loginService,
-    ) {
-    }
+    ) {}
 
     public function store(LoginUserRequest $request): JsonResponse
     {
@@ -41,23 +41,62 @@ class LoginController extends Controller
             return $this->success('Phone verification is required.', $data);
         }
 
-        return $this->success('Login successful.', [
+        $isAdmin = $this->loginService->isAdmin($user);
+
+        $response = $this->success('Login successful.', [
             'user' => [
                 'public_id' => $user->public_id,
                 'full_name' => $user->full_name,
                 'username' => $user->username,
                 'email' => $user->email,
             ],
-            'token' => $result['token'],
+            'token' => $isAdmin ? null : $result['token'],
             'token_type' => 'Bearer',
             'next_step' => 'completed',
         ]);
+
+        if ($isAdmin) {
+            $response->withCookie($this->adminTokenCookie($result['token']));
+        }
+
+        return $response;
     }
 
     public function destroy(Request $request): JsonResponse
     {
         $this->loginService->logout($request);
 
-        return $this->success('Logout successful.');
+        return $this->success('Logout successful.')
+            ->withCookie($this->expiredAdminTokenCookie());
+    }
+
+    protected function adminTokenCookie(string $token): Cookie
+    {
+        return cookie()->make(
+            name: 'admin_token',
+            value: $token,
+            minutes: $this->loginService->adminTokenTtlMinutes(),
+            path: '/',
+            domain: null,
+            secure: true,
+            httpOnly: true,
+            raw: false,
+            sameSite: 'strict',
+        );
+    }
+
+    protected function expiredAdminTokenCookie(): Cookie
+    {
+        return cookie()->make(
+            name: 'admin_token',
+            value: '',
+            minutes: -240,
+            path: '/',
+            domain: null,
+            secure: true,
+            httpOnly: true,
+            raw: false,
+            sameSite: 'strict',
+        );
     }
 }

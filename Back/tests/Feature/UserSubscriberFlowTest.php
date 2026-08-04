@@ -103,22 +103,32 @@ class UserSubscriberFlowTest extends TestCase
         $this->assertNotNull($user->phone_mfa_code);
         $this->assertNotSame($mfaCode, $user->phone_mfa_code);
 
-        $this->postJson('/api/v1/auth/verify-phone-mfa', [
+        $mfaLogin = $this->postJson('/api/v1/auth/verify-phone-mfa', [
             'email' => 'muhannad@test.com',
             'code' => $mfaCode,
-        ])
+        ]);
+
+        $mfaLogin
             ->assertOk()
             ->assertJsonPath('data.next_step', 'completed')
             ->assertJsonPath('data.user.username', 'muhannad')
             ->assertJsonPath('data.token_type', 'Bearer')
             ->assertJsonStructure(['data' => ['token']]);
 
+        $mfaTokenId = (int) str($mfaLogin->json('data.token'))->before('|')->toString();
+        $this->assertTrue($user->tokens()->whereKey($mfaTokenId)->firstOrFail()->expires_at->between(
+            now()->addMinutes(43199),
+            now()->addMinutes(43200),
+        ));
+
         $this->assertNotNull($user->refresh()->first_login_mfa_completed_at);
 
-        $this->postJson('/api/v1/auth/login', [
+        $futureLogin = $this->postJson('/api/v1/auth/login', [
             'email' => 'muhannad@test.com',
             'password' => 'Password123!',
-        ])
+        ]);
+
+        $futureLogin
             ->assertOk()
             ->assertJsonPath('data.next_step', 'completed')
             ->assertJsonPath('data.user.username', 'muhannad')

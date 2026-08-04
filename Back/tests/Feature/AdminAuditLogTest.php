@@ -62,7 +62,7 @@ class AdminAuditLogTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/audit-logs?action=user.tokens_revoked&entity_type=user&ip_address=127.0.0.1&search=tokens&direction=asc&per_page=5')
+        $this->getJson('/api/v1/admin/audit?action=user.tokens_revoked&entity_type=user&ip_address=127.0.0.1&search=tokens&direction=asc&per_page=5')
             ->assertOk()
             ->assertJsonPath('message', 'Audit logs retrieved successfully.')
             ->assertJsonPath('data.audit_logs.data.0.id', $logId)
@@ -101,14 +101,14 @@ class AdminAuditLogTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson("/api/v1/admin/audit-logs/{$logId}")
+        $this->getJson("/api/v1/admin/audit/{$logId}")
             ->assertOk()
             ->assertJsonPath('data.audit_log.id', $logId)
             ->assertJsonPath('data.audit_log.status', 'failure')
             ->assertJsonPath('data.audit_log.metadata.stripe_secret', '[REDACTED]')
             ->assertJsonPath('data.audit_log.metadata.reason', 'Gateway failure');
 
-        $response = $this->get('/api/v1/admin/audit-logs/export?status=failure');
+        $response = $this->get('/api/v1/admin/audit/export?status=failure');
 
         $response->assertOk();
         $response->assertHeader('content-type', 'text/csv; charset=UTF-8');
@@ -128,11 +128,19 @@ class AdminAuditLogTest extends TestCase
 
     public function test_audit_logs_require_admin_access(): void
     {
-        $this->getJson('/api/v1/admin/audit-logs')->assertUnauthorized();
+        $this->getJson('/api/v1/admin/audit')->assertUnauthorized();
 
         Sanctum::actingAs($this->userWithRole('subscriber', 'member@test.com'));
 
-        $this->getJson('/api/v1/admin/audit-logs')->assertForbidden();
+        $this->getJson('/api/v1/admin/audit')->assertForbidden();
+    }
+
+    public function test_duplicate_audit_logs_route_is_removed(): void
+    {
+        Sanctum::actingAs($this->userWithRole('admin', 'admin@test.com'));
+
+        $this->getJson('/api/v1/admin/audit-logs')->assertNotFound();
+        $this->get('/api/v1/admin/audit-logs/export')->assertNotFound();
     }
 
     private function createTestSchema(): void

@@ -6,53 +6,70 @@ use App\Exceptions\ApiException;
 use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\User;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Stripe\Event;
-use Stripe\Exception\SignatureVerificationException;
 use Stripe\StripeClient;
-use Stripe\Webhook;
-use UnexpectedValueException;
+use Throwable;
 
 class StripeWebhookService
 {
     public function __construct(
         protected SubscriptionService $subscriptionService,
-    ) {
-    }
+    ) {}
 
-    public function handle(string $payload, string $signature): void
+    public function handle(Event $event, ?string $payloadHash = null): string
     {
-        $event = $this->constructEvent($payload, $signature);
-        $processedKey = "narlit:stripe:webhook:processed:{$event->id}";
-        $lock = Cache::lock("narlit:stripe:webhook:lock:{$event->id}", 30);
+        try {
+            return DB::transaction(function () use ($event, $payloadHash): string {
+                $webhookEvent = $this->reserveEvent($event, $payloadHash);
 
-        $lock->block(5, function () use ($event, $processedKey): void {
-            if (Cache::has($processedKey)) {
-                return;
-            }
+                if ($webhookEvent->status === 'processed') {
+                    return 'duplicate';
+                }
 
-            DB::transaction(function () use ($event): void {
-                match ($event->type) {
+                DB::table('stripe_webhook_events')
+                    ->where('id', $webhookEvent->id)
+                    ->update([
+                        'status' => 'processing',
+                        'attempts' => $webhookEvent->attempts + 1,
+                        'updated_at' => now(),
+                    ]);
+
+                $handled = match ($event->type) {
                     'checkout.session.completed' => $this->handleCheckoutCompleted($event),
                     'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted' => $this->handleSubscriptionEvent($event),
                     'invoice.payment_succeeded' => $this->handleInvoicePaid($event),
                     'invoice.payment_failed' => $this->handleInvoiceFailed($event),
-                    default => null,
+                    default => false,
                 };
-            }, 3);
 
-            Cache::put($processedKey, true, now()->addDays(7));
-        });
+                DB::table('stripe_webhook_events')
+                    ->where('id', $webhookEvent->id)
+                    ->update([
+                        'status' => 'processed',
+                        'processed_at' => now(),
+                        'failed_at' => null,
+                        'last_error' => null,
+                        'updated_at' => now(),
+                    ]);
+
+                return $handled ? 'processed' : 'ignored';
+            }, 3);
+        } catch (Throwable $exception) {
+            $this->recordFailure($event, $payloadHash, $exception);
+
+            throw $exception;
+        }
     }
 
-    protected function handleCheckoutCompleted(Event $event): void
+    protected function handleCheckoutCompleted(Event $event): bool
     {
         $session = $event->data->object;
 
         if (($session->mode ?? null) !== 'subscription' || empty($session->subscription)) {
-            return;
+            return false;
         }
 
         $user = $this->resolveUserFromMetadata((array) ($session->metadata ?? []), $session->client_reference_id ?? null);
@@ -67,23 +84,27 @@ class StripeWebhookService
         ) {
             $this->subscriptionService->activateUser($user);
         }
+
+        return true;
     }
 
-    protected function handleSubscriptionEvent(Event $event): void
+    protected function handleSubscriptionEvent(Event $event): bool
     {
         $stripeSubscription = $event->data->object;
         $user = $this->resolveUserFromStripeSubscription($stripeSubscription);
         $plan = $this->resolvePlanFromStripe($stripeSubscription, $stripeSubscription->metadata->plan ?? null);
 
         $this->syncStripeSubscription($user, $stripeSubscription, $plan);
+
+        return true;
     }
 
-    protected function handleInvoicePaid(Event $event): void
+    protected function handleInvoicePaid(Event $event): bool
     {
         $invoice = $event->data->object;
 
         if (empty($invoice->subscription)) {
-            return;
+            return false;
         }
 
         $stripeSubscription = $this->client()->subscriptions->retrieve((string) $invoice->subscription, []);
@@ -118,14 +139,16 @@ class StripeWebhookService
         $payment->save();
 
         $this->subscriptionService->activateUser($user);
+
+        return true;
     }
 
-    protected function handleInvoiceFailed(Event $event): void
+    protected function handleInvoiceFailed(Event $event): bool
     {
         $invoice = $event->data->object;
 
         if (empty($invoice->subscription)) {
-            return;
+            return false;
         }
 
         $subscription = Subscription::query()
@@ -133,7 +156,7 @@ class StripeWebhookService
             ->first();
 
         if ($subscription === null) {
-            return;
+            return false;
         }
 
         $subscription->forceFill([
@@ -145,6 +168,8 @@ class StripeWebhookService
         ])->save();
 
         $this->subscriptionService->deactivateUser($subscription->user);
+
+        return true;
     }
 
     protected function syncStripeSubscription(User $user, object $stripeSubscription, ?string $plan): Subscription
@@ -226,19 +251,62 @@ class StripeWebhookService
         };
     }
 
-    protected function constructEvent(string $payload, string $signature): Event
+    protected function reserveEvent(Event $event, ?string $payloadHash): object
     {
-        $secret = (string) config('services.stripe.webhook_secret');
+        DB::table('stripe_webhook_events')->insertOrIgnore([
+            'stripe_event_id' => $event->id,
+            'event_type' => $event->type,
+            'status' => 'processing',
+            'attempts' => 0,
+            'payload_hash' => $payloadHash,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
-        if ($secret === '') {
-            throw new ApiException('Stripe webhook secret is not configured.', 500);
-        }
+        return DB::table('stripe_webhook_events')
+            ->where('stripe_event_id', $event->id)
+            ->lockForUpdate()
+            ->first();
+    }
 
-        try {
-            return Webhook::constructEvent($payload, $signature, $secret);
-        } catch (UnexpectedValueException|SignatureVerificationException $exception) {
-            throw new ApiException('Invalid Stripe webhook signature.', 400);
-        }
+    protected function recordFailure(Event $event, ?string $payloadHash, Throwable $exception): void
+    {
+        $safeMessage = str($exception->getMessage())->limit(500)->toString();
+
+        DB::transaction(function () use ($event, $payloadHash, $safeMessage): void {
+            DB::table('stripe_webhook_events')->insertOrIgnore([
+                'stripe_event_id' => $event->id,
+                'event_type' => $event->type,
+                'status' => 'failed',
+                'attempts' => 0,
+                'payload_hash' => $payloadHash,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $webhookEvent = DB::table('stripe_webhook_events')
+                ->where('stripe_event_id', $event->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($webhookEvent !== null && $webhookEvent->status !== 'processed') {
+                DB::table('stripe_webhook_events')
+                    ->where('id', $webhookEvent->id)
+                    ->update([
+                        'status' => 'failed',
+                        'attempts' => $webhookEvent->attempts + 1,
+                        'failed_at' => now(),
+                        'last_error' => $safeMessage,
+                        'updated_at' => now(),
+                    ]);
+            }
+        }, 3);
+
+        Log::error('Stripe webhook processing failed.', [
+            'stripe_event_id' => $event->id,
+            'event_type' => $event->type,
+            'error' => $safeMessage,
+        ]);
     }
 
     protected function client(): StripeClient

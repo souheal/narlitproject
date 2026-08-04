@@ -9,13 +9,13 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 
 class PhoneMfaService
 {
     public function __construct(
         protected SmsService $smsService,
-    ) {
-    }
+    ) {}
 
     public function issueForUser(User $user): array
     {
@@ -57,12 +57,18 @@ class PhoneMfaService
         }
 
         return DB::transaction(function () use ($user): User {
-            $user->forceFill([
+            $attributes = [
                 'phone_mfa_code' => null,
                 'phone_mfa_expires_at' => null,
                 'phone_mfa_verified_at' => now(),
                 'first_login_mfa_completed_at' => $user->first_login_mfa_completed_at ?? now(),
-            ])->save();
+            ];
+
+            if (Schema::hasColumn('users', 'mfa_enrolled_at')) {
+                $attributes['mfa_enrolled_at'] = $user->mfa_enrolled_at ?? now();
+            }
+
+            $user->forceFill($attributes)->save();
 
             Cache::forget($this->previewCacheKey($user));
 

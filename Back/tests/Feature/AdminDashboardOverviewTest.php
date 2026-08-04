@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -160,54 +161,44 @@ class AdminDashboardOverviewTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/dashboard?period=last_30_days')
+        $this->assertTrue(Route::has('admin.dashboard'));
+        $this->assertSame('api/v1/admin/analytics/overview', Route::getRoutes()->getByName('admin.dashboard')?->uri());
+
+        $this->getJson('/api/v1/admin/analytics/overview?date_from=2026-07-01&date_to=2026-07-31')
             ->assertOk()
-            ->assertJsonPath('message', 'Admin dashboard retrieved successfully.')
-            ->assertJsonPath('data.period.key', 'last_30_days')
-            ->assertJsonPath('data.metrics.monthly_recurring_revenue.value', '7.00')
-            ->assertJsonPath('data.metrics.active_subscribers.value', 1)
-            ->assertJsonPath('data.metrics.total_article_reads.value', 1)
-            ->assertJsonPath('data.metrics.total_impact_amount.value', '0.07')
-            ->assertJsonPath('data.metrics.active_organizations.value', 1)
-            ->assertJsonPath('data.metrics.pending_organization_reviews.value', 1)
-            ->assertJsonPath('data.metrics.pending_article_reviews.value', 1)
-            ->assertJsonPath('data.metrics.failed_or_pending_payouts.value', 1)
-            ->assertJsonPath('data.review_queues.pending_organizations.count', 1)
-            ->assertJsonPath('data.review_queues.pending_articles.items.0.title', 'Needs Review')
-            ->assertJsonPath('data.review_queues.failed_payouts.count', 1)
-            ->assertJsonPath('data.recent_activity.admin_actions.0.action', 'organization.approved')
-            ->assertJsonPath('data.recent_activity.subscriptions.0.public_id', $subscription->public_id)
-            ->assertJsonPath('data.recent_activity.payments.0.status', 'paid')
-            ->assertJsonPath('data.recent_activity.organization_approvals.0.organization_name', 'Approved Aid')
-            ->assertJsonPath('data.recent_activity.published_articles.0.title', 'Published Story')
+            ->assertJsonPath('message', 'Analytics overview retrieved successfully.')
+            ->assertJsonPath('data.metrics.article_reads', 1)
+            ->assertJsonPath('data.metrics.gross_revenue', '7.00')
+            ->assertJsonPath('data.metrics.net_revenue', '6.70')
+            ->assertJsonPath('data.metrics.impact_amount', '0.07')
             ->assertJsonStructure([
                 'data' => [
                     'metrics' => [
-                        'monthly_recurring_revenue' => ['value', 'previous_value', 'change_percent', 'trend', 'sparkline', 'format'],
+                        'signups',
+                        'article_reads',
+                        'gross_revenue',
+                        'net_revenue',
+                        'impact_amount',
+                        'published_articles',
                     ],
-                    'previous_period_comparison',
-                    'review_queues',
-                    'recent_activity',
                 ],
             ]);
     }
 
     public function test_dashboard_requires_admin_access(): void
     {
-        $this->getJson('/api/v1/admin/dashboard')->assertUnauthorized();
+        $this->getJson('/api/v1/admin/analytics/overview')->assertUnauthorized();
 
         Sanctum::actingAs($this->userWithRole('subscriber', 'member@test.com', true));
 
-        $this->getJson('/api/v1/admin/dashboard')->assertForbidden();
+        $this->getJson('/api/v1/admin/analytics/overview')->assertForbidden();
     }
 
-    public function test_dashboard_rejects_unknown_period(): void
+    public function test_orphan_dashboard_route_is_removed(): void
     {
         Sanctum::actingAs($this->userWithRole('admin', 'admin@test.com', true));
 
-        $this->getJson('/api/v1/admin/dashboard?period=yesterday')
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'Please choose a valid dashboard period.');
+        $this->getJson('/api/v1/admin/dashboard')->assertNotFound();
     }
 
     private function createTestSchema(): void

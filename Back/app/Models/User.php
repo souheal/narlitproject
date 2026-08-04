@@ -8,12 +8,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, HasRoles {
+        HasRoles::hasRole as protected spatieHasRole;
+        HasRoles::getRoleNames as protected spatieGetRoleNames;
+    }
+
+    use Notifiable;
 
     protected $fillable = [
         'public_id',
@@ -30,6 +38,7 @@ class User extends Authenticatable
         'phone_mfa_code',
         'phone_mfa_expires_at',
         'phone_mfa_verified_at',
+        'mfa_enrolled_at',
         'password_reset_otp_code',
         'password_reset_otp_expires_at',
         'password_reset_otp_verified_at',
@@ -56,6 +65,7 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'phone_mfa_expires_at' => 'datetime',
             'phone_mfa_verified_at' => 'datetime',
+            'mfa_enrolled_at' => 'datetime',
             'password_reset_otp_expires_at' => 'datetime',
             'password_reset_otp_verified_at' => 'datetime',
             'first_login_mfa_completed_at' => 'datetime',
@@ -98,5 +108,94 @@ class User extends Authenticatable
     public function impactWallet(): HasOne
     {
         return $this->hasOne(ImpactWallet::class);
+    }
+
+    public function hasRole($roles, ?string $guard = null): bool
+    {
+        if ($this->permissionTablesExist()) {
+            try {
+                if ($this->spatieHasRole($roles, $guard)) {
+                    return true;
+                }
+            } catch (\Throwable) {
+                //
+            }
+        }
+
+        if (! is_string($roles)) {
+            return false;
+        }
+
+        return DB::table('roles')->where('id', $this->role_id)->value('name') === $roles;
+    }
+
+    public function isAdminAccount(): bool
+    {
+        if ($this->permissionTablesExist()) {
+            try {
+                if ($this->spatieHasRole(['super_admin', 'admin_finance', 'admin_content', 'admin_users', 'admin_settings', 'admin_readonly'])) {
+                    return true;
+                }
+            } catch (\Throwable) {
+                //
+            }
+        }
+
+        return DB::table('roles')->where('id', $this->role_id)->value('name') === 'admin';
+    }
+
+    public function requiresMfa(): bool
+    {
+        if ($this->isAdminAccount()) {
+            return true;
+        }
+
+        return $this->first_login_mfa_completed_at === null;
+    }
+
+    public function hasCompletedMfaEnrollment(): bool
+    {
+        if (array_key_exists('mfa_enrolled_at', $this->attributes)) {
+            return $this->mfa_enrolled_at !== null;
+        }
+
+        return $this->first_login_mfa_completed_at !== null;
+    }
+
+    public function safeAdminRoleNames(): array
+    {
+        if (! $this->permissionTablesExist()) {
+            return [];
+        }
+
+        try {
+            return $this->spatieGetRoleNames()->values()->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    public function safeAdminPermissionNames(): array
+    {
+        if (! $this->permissionTablesExist()) {
+            return [];
+        }
+
+        try {
+            return $this->getAllPermissions()->pluck('name')->values()->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    protected function permissionTablesExist(): bool
+    {
+        if (app()->runningUnitTests() && ! config('permission.enforce_in_tests', false)) {
+            return false;
+        }
+
+        return Schema::hasTable('permissions')
+            && Schema::hasTable('model_has_roles')
+            && Schema::hasTable('role_has_permissions');
     }
 }

@@ -6,16 +6,18 @@ use App\Exceptions\ApiException;
 use App\Models\User;
 use App\Services\Billing\SubscriptionService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class LoginService
 {
     public function __construct(
         protected SubscriptionService $subscriptionService,
         protected PhoneMfaService $phoneMfaService,
-    ) {
-    }
+    ) {}
 
     public function attempt(string $email, string $password, Request $request): array
     {
@@ -52,10 +54,13 @@ class LoginService
             throw new ApiException('Please verify your email before continuing.', 403);
         }
 
-        $roleName = \Illuminate\Support\Facades\DB::table('roles')->where('id', $user->role_id)->value('name');
-        $isAdmin  = $roleName === 'admin';
+        $isAdmin = $user->isAdminAccount();
 
-        if (! $isAdmin) {
+        if ($isAdmin) {
+            if (! $user->is_active) {
+                throw new ApiException('Admin account is not active.', 403);
+            }
+        } else {
             if (! $user->is_active) {
                 throw new ApiException('Please complete your subscription before logging in.', 403);
             }
@@ -67,7 +72,11 @@ class LoginService
 
         RateLimiter::clear($limiterKey);
 
-        if ($user->first_login_mfa_completed_at === null) {
+        if ($isAdmin && ($user->phone === null || $user->phone === '')) {
+            throw new ApiException('Phone verification is required for administrator accounts. Please contact support.', 403);
+        }
+
+        if ($isAdmin || $user->requiresMfa()) {
             $mfaPayload = $this->phoneMfaService->issueForUser($user);
 
             return [
@@ -94,6 +103,51 @@ class LoginService
     public function logout(Request $request): void
     {
         $request->user()?->currentAccessToken()?->delete();
+    }
+
+    public function refreshAdminToken(User $admin, Request $request): array
+    {
+        if (! $admin->isAdminAccount()) {
+            throw new ApiException('Admin access is required.', 403);
+        }
+
+        if ($admin->email_verified_at === null || ! $admin->is_active) {
+            throw new ApiException('Admin account is not active.', 403);
+        }
+
+        if (! $admin->hasCompletedMfaEnrollment()) {
+            throw new ApiException('Administrator MFA enrollment is required.', 403, [
+                'next_step' => 'mfa_enrollment_required',
+            ]);
+        }
+
+        return DB::transaction(function () use ($admin, $request): array {
+            $currentToken = $admin->currentAccessToken();
+
+            if (! $currentToken instanceof PersonalAccessToken) {
+                throw new ApiException('Authentication is required.', 401);
+            }
+
+            $lockedToken = PersonalAccessToken::query()
+                ->whereKey($currentToken->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($lockedToken === null || ($lockedToken->expires_at !== null && $lockedToken->expires_at->isPast())) {
+                throw new ApiException('Authentication is required.', 401);
+            }
+
+            $lockedToken->delete();
+
+            $plainTextToken = $this->createToken($admin);
+
+            $this->recordAdminRefresh($admin, $request);
+
+            return [
+                'token' => $plainTextToken,
+                'expires_in_minutes' => $this->adminTokenTtlMinutes(),
+            ];
+        });
     }
 
     public function completePhoneMfa(User $user, string $code, Request $request): array
@@ -147,8 +201,54 @@ class LoginService
         ])->save();
     }
 
+    public function adminTokenTtlMinutes(): int
+    {
+        return max(1, (int) config('auth.admin_token_ttl', 240));
+    }
+
+    public function userTokenTtlMinutes(): int
+    {
+        return max(1, (int) config('auth.user_token_ttl', 43200));
+    }
+
+    public function isAdmin(User $user): bool
+    {
+        return $user->isAdminAccount();
+    }
+
+    protected function tokenTtlMinutes(User $user): int
+    {
+        return $this->isAdmin($user)
+            ? $this->adminTokenTtlMinutes()
+            : $this->userTokenTtlMinutes();
+    }
+
     protected function createToken(User $user): string
     {
-        return $user->createToken('narlit-user-token')->plainTextToken;
+        return $user->createToken(
+            'web',
+            ['*'],
+            now()->addMinutes($this->tokenTtlMinutes($user)),
+        )->plainTextToken;
+    }
+
+    protected function recordAdminRefresh(User $admin, Request $request): void
+    {
+        if (! Schema::hasTable('admin_logs')) {
+            return;
+        }
+
+        DB::table('admin_logs')->insert([
+            'admin_id' => $admin->id,
+            'action' => 'auth.session_refreshed',
+            'entity_type' => 'user',
+            'entity_id' => $admin->public_id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'metadata' => json_encode([
+                'expires_in_minutes' => $this->adminTokenTtlMinutes(),
+            ]),
+            'created_at' => now(),
+        ]);
     }
 }

@@ -115,7 +115,7 @@ class AdminSubscriptionsRevenueTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson("/api/v1/admin/subscriptions/{$subscription->public_id}/cancel", [
+        $this->withHeader('Idempotency-Key', (string) str()->uuid())->postJson("/api/v1/admin/subscriptions/{$subscription->public_id}/cancel", [
             'reason' => 'Customer requested cancellation.',
         ])
             ->assertOk()
@@ -141,7 +141,9 @@ class AdminSubscriptionsRevenueTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson("/api/v1/admin/payments/{$payment->public_id}/refund", [
+        $idempotencyKey = (string) str()->uuid();
+
+        $this->withHeader('Idempotency-Key', $idempotencyKey)->postJson("/api/v1/admin/payments/{$payment->public_id}/refund", [
             'reason' => 'Customer reported a duplicate charge.',
         ])
             ->assertOk()
@@ -151,10 +153,11 @@ class AdminSubscriptionsRevenueTest extends TestCase
         $this->assertSame('refunded', $payment->refresh()->status);
         $this->assertNotNull($payment->metadata['admin_refund']['stripe_refund_id'] ?? null);
 
-        $this->postJson("/api/v1/admin/payments/{$payment->public_id}/refund", [
+        $this->withHeader('Idempotency-Key', $idempotencyKey)->postJson("/api/v1/admin/payments/{$payment->public_id}/refund", [
             'reason' => 'Customer reported a duplicate charge.',
         ])
             ->assertOk()
+            ->assertHeader('Idempotent-Replay', 'true')
             ->assertJsonPath('data.payment.status', 'refunded');
 
         $this->assertSame(1, DB::table('admin_logs')->where('action', 'payment.refunded')->where('entity_id', $payment->public_id)->count());
@@ -172,15 +175,51 @@ class AdminSubscriptionsRevenueTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson("/api/v1/admin/payments/{$payment->public_id}/refund")
+        $this->withHeader('Idempotency-Key', (string) str()->uuid())->postJson("/api/v1/admin/payments/{$payment->public_id}/refund")
             ->assertStatus(422)
             ->assertJsonValidationErrors(['reason']);
+
+        $this->withHeader('Idempotency-Key', (string) str()->uuid())->postJson("/api/v1/admin/payments/{$payment->public_id}/refund", [
+            'reason' => 'Customer reported a duplicate charge.',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Only paid payments can be refunded.');
+    }
+
+    public function test_idempotency_key_is_required_and_bound_to_the_original_request(): void
+    {
+        $admin = $this->userWithRole('admin', 'admin@test.com');
+        $subscriber = $this->userWithRole('subscriber', 'member@test.com');
+        $subscription = $this->subscription($subscriber, 'monthly', '7.00', 'active');
+        $payment = $this->payment($subscription, '7.00', '0.30', '6.70', now()->subDay());
+
+        Sanctum::actingAs($admin);
 
         $this->postJson("/api/v1/admin/payments/{$payment->public_id}/refund", [
             'reason' => 'Customer reported a duplicate charge.',
         ])
             ->assertStatus(422)
-            ->assertJsonPath('message', 'Only paid payments can be refunded.');
+            ->assertJsonPath('message', 'An idempotency key is required.');
+
+        $this->withHeader('Idempotency-Key', 'not-a-uuid')->postJson("/api/v1/admin/payments/{$payment->public_id}/refund", [
+            'reason' => 'Customer reported a duplicate charge.',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'The idempotency key must be a valid UUID.');
+
+        $idempotencyKey = (string) str()->uuid();
+
+        $this->withHeader('Idempotency-Key', $idempotencyKey)->postJson("/api/v1/admin/payments/{$payment->public_id}/refund", [
+            'reason' => 'Customer reported a duplicate charge.',
+        ])->assertOk();
+
+        $this->withHeader('Idempotency-Key', $idempotencyKey)->postJson("/api/v1/admin/subscriptions/{$subscription->public_id}/cancel", [
+            'reason' => 'Same UUID used for a different operation.',
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'This idempotency key was already used for a different request.');
+
+        $this->assertSame('active', $subscription->refresh()->status);
     }
 
     public function test_subscription_revenue_requires_admin_access(): void
@@ -195,6 +234,7 @@ class AdminSubscriptionsRevenueTest extends TestCase
     private function createTestSchema(): void
     {
         Schema::dropIfExists('admin_logs');
+        Schema::dropIfExists('idempotency_keys');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('subscriptions');
         Schema::dropIfExists('personal_access_tokens');
@@ -234,6 +274,27 @@ class AdminSubscriptionsRevenueTest extends TestCase
             $table->timestamp('last_used_at')->nullable();
             $table->timestamp('expires_at')->nullable();
             $table->timestamps();
+        });
+
+        Schema::create('idempotency_keys', function (Blueprint $table): void {
+            $table->id();
+            $table->uuid('key');
+            $table->foreignId('actor_id')->constrained('users')->restrictOnDelete();
+            $table->string('operation');
+            $table->string('request_method', 10);
+            $table->string('request_path_hash', 64);
+            $table->string('request_fingerprint', 64);
+            $table->string('status', 32);
+            $table->unsignedSmallInteger('response_status')->nullable();
+            $table->json('response_body')->nullable();
+            $table->string('resource_type')->nullable();
+            $table->string('resource_id')->nullable();
+            $table->timestamp('locked_at')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->timestamp('failed_at')->nullable();
+            $table->timestamp('expires_at');
+            $table->timestamps();
+            $table->unique(['actor_id', 'key']);
         });
 
         Schema::create('subscriptions', function (Blueprint $table): void {
