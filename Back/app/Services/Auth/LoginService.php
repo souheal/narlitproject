@@ -4,6 +4,7 @@ namespace App\Services\Auth;
 
 use App\Exceptions\ApiException;
 use App\Models\User;
+use App\Services\Admin\AdminSecurityAuditService;
 use App\Services\Billing\SubscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,13 @@ class LoginService
         if ($user === null || ! Hash::check($password, $user->password)) {
             if ($user !== null) {
                 $this->recordFailedAttempt($user);
+
+                if ($user->isAdminAccount()) {
+                    app(AdminSecurityAuditService::class)->log($user, 'auth.admin_login_failed', $request, [
+                        'status' => 'failure',
+                        'reason' => 'invalid_credentials',
+                    ]);
+                }
             }
 
             RateLimiter::hit($limiterKey, 900);
@@ -73,11 +81,23 @@ class LoginService
         RateLimiter::clear($limiterKey);
 
         if ($isAdmin && ($user->phone === null || $user->phone === '')) {
+            app(AdminSecurityAuditService::class)->log($user, 'auth.admin_login_failed', $request, [
+                'status' => 'failure',
+                'reason' => 'missing_phone',
+            ]);
+
             throw new ApiException('Phone verification is required for administrator accounts. Please contact support.', 403);
         }
 
         if ($isAdmin || $user->requiresMfa()) {
             $mfaPayload = $this->phoneMfaService->issueForUser($user);
+
+            if ($isAdmin) {
+                app(AdminSecurityAuditService::class)->log($user, 'auth.admin_login_password_verified', $request, [
+                    'status' => 'success',
+                    'next_step' => 'phone_mfa_required',
+                ]);
+            }
 
             return [
                 'status' => 'phone_mfa_required',

@@ -37,7 +37,7 @@ class OrganizationRegistrationFlowTest extends TestCase
             'password_confirmation' => 'Password123!',
             'website' => 'https://athar.example',
             'tax_id' => '12-3456789',
-            'certificate_pdf' => UploadedFile::fake()->create('certificate.pdf', 128, 'application/pdf'),
+            'certificate_pdf' => $this->certificatePdf(),
         ], ['Accept' => 'application/json']);
 
         $response
@@ -75,7 +75,7 @@ class OrganizationRegistrationFlowTest extends TestCase
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
             'tax_id' => '987654321',
-            'certificate_pdf' => UploadedFile::fake()->create('certificate.pdf', 128, 'application/pdf'),
+            'certificate_pdf' => $this->certificatePdf(),
         ], ['Accept' => 'application/json'])->assertCreated();
 
         $user = User::query()->where('email', 'review@test.com')->firstOrFail();
@@ -111,7 +111,7 @@ class OrganizationRegistrationFlowTest extends TestCase
         $this->seedIrsOrganization('123456789', 'Athar Foundation');
 
         $payload = $this->validPayload([
-            'certificate_pdf' => UploadedFile::fake()->create('certificate.txt', 10, 'text/plain'),
+            'certificate_pdf' => UploadedFile::fake()->createWithContent('certificate.txt', 'not a pdf'),
         ]);
 
         $this->post('/api/v1/auth/organization/register', $payload, ['Accept' => 'application/json'])
@@ -120,6 +120,40 @@ class OrganizationRegistrationFlowTest extends TestCase
 
         $this->assertDatabaseCount('users', 0);
         $this->assertDatabaseCount('organization_profiles', 0);
+    }
+
+    public function test_organization_registration_rejects_pdf_extension_with_non_pdf_content(): void
+    {
+        $this->seedIrsOrganization('123456789', 'Athar Foundation');
+
+        $payload = $this->validPayload([
+            'certificate_pdf' => UploadedFile::fake()->createWithContent('certificate.pdf', 'not a pdf'),
+        ]);
+
+        $this->post('/api/v1/auth/organization/register', $payload, ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['certificate_pdf']);
+
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('organization_profiles', 0);
+    }
+
+    public function test_organization_certificate_uses_server_generated_path_despite_traversal_filename(): void
+    {
+        $this->seedIrsOrganization('123456789', 'Athar Foundation');
+
+        $this->post('/api/v1/auth/organization/register', $this->validPayload([
+            'certificate_pdf' => $this->certificatePdf('../../evil.pdf'),
+        ]), ['Accept' => 'application/json'])->assertCreated();
+
+        $user = User::query()->where('email', 'org@test.com')->firstOrFail();
+        $profile = OrganizationProfile::query()->where('user_id', $user->id)->firstOrFail();
+
+        $this->assertStringStartsWith('organization-certificates/'.$user->public_id.'/', $profile->certificate_file);
+        $this->assertMatchesRegularExpression('/^organization-certificates\/'.$user->public_id.'\/[0-9a-f-]{36}\.pdf$/', $profile->certificate_file);
+        $this->assertStringNotContainsString('evil', $profile->certificate_file);
+        $this->assertStringNotContainsString('..', $profile->certificate_file);
+        Storage::disk('local')->assertExists($profile->certificate_file);
     }
 
     public function test_organization_registration_rejects_duplicate_email_and_tax_id(): void
@@ -407,8 +441,13 @@ class OrganizationRegistrationFlowTest extends TestCase
             'password_confirmation' => 'Password123!',
             'website' => 'https://athar.example',
             'tax_id' => '12-3456789',
-            'certificate_pdf' => UploadedFile::fake()->create('certificate.pdf', 128, 'application/pdf'),
+            'certificate_pdf' => $this->certificatePdf(),
         ], $overrides);
+    }
+
+    private function certificatePdf(string $name = 'certificate.pdf'): UploadedFile
+    {
+        return UploadedFile::fake()->createWithContent($name, "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF");
     }
 
     private function seedIrsOrganization(string $ein, string $name): void

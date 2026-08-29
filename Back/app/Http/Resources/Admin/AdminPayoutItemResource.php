@@ -5,6 +5,7 @@ namespace App\Http\Resources\Admin;
 use App\Models\PayoutItem;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Schema;
 
 class AdminPayoutItemResource extends JsonResource
 {
@@ -18,7 +19,7 @@ class AdminPayoutItemResource extends JsonResource
             'organization' => [
                 'public_id' => $item->organizationProfile?->public_id,
                 'name' => $item->organizationProfile?->organization_name,
-                'stripe_connect_account_id' => $item->organizationProfile?->stripe_connect_account_id,
+                'stripe_connect_account_id' => $this->canViewPayoutIdentifiers($request) ? $item->organizationProfile?->stripe_connect_account_id : null,
                 'payouts_enabled' => (bool) $item->organizationProfile?->payouts_enabled,
             ],
             'reads' => (int) $item->total_reads,
@@ -26,11 +27,20 @@ class AdminPayoutItemResource extends JsonResource
             'engagement_score' => number_format((float) $item->engagement_score, 4, '.', ''),
             'engagement_share' => $item->metadata['engagement_share'] ?? null,
             'payout_amount' => number_format((float) $item->payout_amount, 2, '.', ''),
-            'stripe_transfer_id' => $item->stripe_transfer_id,
+            'stripe_transfer_id' => $this->canViewPayoutIdentifiers($request) ? $item->stripe_transfer_id : null,
             'transfer_status' => $item->transfer_status,
-            'failure_reason' => $item->metadata['failure_reason'] ?? null,
+            'failure_reason' => $this->canViewPayoutIdentifiers($request) ? ($item->metadata['failure_reason'] ?? null) : null,
             'transferred_at' => $item->transferred_at?->toIso8601String(),
-            'metadata' => $item->metadata,
+            'metadata' => $this->canViewPayoutIdentifiers($request) ? $item->metadata : null,
         ];
+    }
+
+    protected function canViewPayoutIdentifiers(Request $request): bool
+    {
+        if (! Schema::hasTable('permissions')) {
+            return false;
+        }
+
+        return (bool) $request->user()?->canAny(['payouts.execute', 'payouts.generate']);
     }
 }

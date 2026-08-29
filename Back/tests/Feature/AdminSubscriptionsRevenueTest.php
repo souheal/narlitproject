@@ -96,7 +96,7 @@ class AdminSubscriptionsRevenueTest extends TestCase
             ->assertJsonPath('data.subscriptions.data.0.public_id', $subscription->public_id)
             ->assertJsonPath('data.subscriptions.data.0.subscriber.email', 'member@test.com')
             ->assertJsonPath('data.subscriptions.data.0.amount', '7.00')
-            ->assertJsonPath('data.subscriptions.data.0.stripe_customer_id', $subscription->stripe_customer_id)
+            ->assertJsonPath('data.subscriptions.data.0.stripe_customer_id', null)
             ->assertJsonPath('data.subscriptions.meta.per_page', 5)
             ->assertJsonMissingPath('data.subscriptions.data.0.stripe_secret');
 

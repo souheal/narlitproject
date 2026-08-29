@@ -15,6 +15,7 @@ class CreateCheckoutSessionRequest extends FormRequest
     {
         $this->merge([
             'email' => strtolower(trim((string) $this->input('email'))),
+            'checkout_token' => is_string($this->input('checkout_token')) ? trim($this->input('checkout_token')) : $this->input('checkout_token'),
             'subscription_plan' => $this->input('subscription_plan', 'monthly'),
         ]);
     }
@@ -23,6 +24,7 @@ class CreateCheckoutSessionRequest extends FormRequest
     {
         return [
             'email' => ['required', 'string', 'email:rfc', 'max:255'],
+            'checkout_token' => ['nullable', 'string', 'max:255'],
             'subscription_plan' => ['sometimes', 'in:monthly,yearly'],
         ];
     }

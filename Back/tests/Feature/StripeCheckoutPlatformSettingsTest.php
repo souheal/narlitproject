@@ -6,6 +6,7 @@ use App\Models\PlatformSetting;
 use App\Models\User;
 use App\Services\Admin\PlatformSettingsService;
 use App\Services\Auth\RegistrationService;
+use App\Services\Billing\CheckoutContinuationTokenService;
 use App\Services\Billing\StripeCheckoutService;
 use App\Services\Billing\SubscriptionService;
 use Illuminate\Database\Schema\Blueprint;
@@ -38,6 +39,7 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
 
         $this->postJson('/api/v1/billing/checkout', [
             'email' => $user->email,
+            'checkout_token' => $this->checkoutToken($user),
             'subscription_plan' => 'monthly',
         ])
             ->assertOk()
@@ -59,6 +61,7 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
 
         $this->postJson('/api/v1/billing/checkout', [
             'email' => $user->email,
+            'checkout_token' => $this->checkoutToken($user),
             'subscription_plan' => 'monthly',
         ])
             ->assertStatus(422)
@@ -72,6 +75,7 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
 
         $this->postJson('/api/v1/billing/checkout', [
             'email' => $user->email,
+            'checkout_token' => $this->checkoutToken($user),
             'subscription_plan' => 'yearly',
         ])
             ->assertStatus(422)
@@ -85,6 +89,7 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
 
         $this->postJson('/api/v1/billing/checkout', [
             'email' => $user->email,
+            'checkout_token' => $this->checkoutToken($user),
             'subscription_plan' => 'monthly',
         ])
             ->assertStatus(422)
@@ -96,6 +101,7 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
 
         $this->postJson('/api/v1/billing/checkout', [
             'email' => $user->email,
+            'checkout_token' => $this->checkoutToken($user),
             'subscription_plan' => 'monthly',
         ])
             ->assertStatus(422)
@@ -111,6 +117,7 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
         $this->storePlans([$this->plan('monthly', 'price_old_monthly', true)]);
         $this->postJson('/api/v1/billing/checkout', [
             'email' => $user->email,
+            'checkout_token' => $this->checkoutToken($user),
             'subscription_plan' => 'monthly',
         ])->assertOk();
         $this->assertSame('price_old_monthly', $fake->payload['line_items'][0]['price']);
@@ -122,6 +129,7 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
 
         $this->postJson('/api/v1/billing/checkout', [
             'email' => $user->email,
+            'checkout_token' => $this->checkoutToken($user),
             'subscription_plan' => 'monthly',
         ])->assertOk();
         $this->assertSame('price_new_monthly', $fake->payload['line_items'][0]['price']);
@@ -136,6 +144,7 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
 
         $this->postJson('/api/v1/billing/checkout', [
             'email' => $user->email,
+            'checkout_token' => $this->checkoutToken($user),
             'subscription_plan' => 'monthly',
         ])->assertOk();
 
@@ -152,6 +161,7 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
 
         $this->postJson('/api/v1/billing/checkout', [
             'email' => $user->email,
+            'checkout_token' => $this->checkoutToken($user),
             'subscription_plan' => 'monthly',
         ])
             ->assertStatus(502)
@@ -167,6 +177,7 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
 
         $this->postJson('/api/v1/billing/checkout', [
             'email' => $user->email,
+            'checkout_token' => $this->checkoutToken($user),
             'subscription_plan' => 'monthly',
         ])->assertOk();
 
@@ -222,6 +233,11 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
             $table->string('otp_code')->nullable();
             $table->timestamp('otp_expires_at')->nullable();
             $table->timestamp('email_verified_at')->nullable();
+            $table->string('checkout_token_hash')->nullable();
+            $table->timestamp('checkout_token_expires_at')->nullable();
+            $table->timestamp('checkout_token_consumed_at')->nullable();
+            $table->string('checkout_replay_message')->nullable();
+            $table->json('checkout_replay_data')->nullable();
             $table->boolean('is_active')->default(false);
             $table->integer('failed_login_attempts')->default(0);
             $table->timestamp('locked_until')->nullable();
@@ -317,6 +333,11 @@ class StripeCheckoutPlatformSettingsTest extends TestCase
             'is_active' => $active,
             'failed_login_attempts' => 0,
         ]);
+    }
+
+    private function checkoutToken(User $user): string
+    {
+        return app(CheckoutContinuationTokenService::class)->issueForUser($user->refresh());
     }
 }
 

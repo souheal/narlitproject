@@ -110,6 +110,7 @@ class AdminCriticalPayoutTest extends TestCase
         $this->withHeader('Idempotency-Key', (string) str()->uuid())->postJson('/api/v1/admin/payouts/generate', [
             'month' => '2026-07',
         ])->assertStatus(409);
+        $this->assertSame(1, $this->auditCount('payout_batch.generation_failed', '2026-07-01'));
 
         Sanctum::actingAs($readonly);
         $this->withHeader('Idempotency-Key', (string) str()->uuid())->postJson('/api/v1/admin/payouts/generate', [
@@ -148,6 +149,7 @@ class AdminCriticalPayoutTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('message', 'Only pending or failed payout batches can be executed.');
         $this->assertSame(1, PayoutItem::query()->whereNotNull('stripe_transfer_id')->count());
+        $this->assertSame(1, $this->auditCount('payout_batch.execution_failed', $batch->public_id));
     }
 
     public function test_payout_execution_handles_missing_connect_retry_and_permissions(): void
@@ -189,6 +191,45 @@ class AdminCriticalPayoutTest extends TestCase
 
         $this->assertSame('completed', $item->refresh()->transfer_status);
         $this->assertSame('completed', $batch->refresh()->status);
+    }
+
+    public function test_readonly_payout_view_cannot_see_sensitive_operational_metadata(): void
+    {
+        $finance = $this->createAdminWithRole('admin_finance');
+        $readonly = $this->createAdminWithRole('admin_readonly');
+        $organization = $this->createOrganizationProfile([
+            'stripe_connect_account_id' => 'acct_sensitive',
+        ]);
+        $batch = $this->createPendingPayoutBatch($organization);
+        $item = $batch->items()->firstOrFail();
+
+        $item->forceFill([
+            'stripe_transfer_id' => 'tr_sensitive',
+            'transfer_status' => 'failed',
+            'metadata' => [
+                'failure_reason' => 'Processor returned sensitive provider detail.',
+                'engagement_share' => '1.0000',
+                'processor_response' => 'provider-internal-value',
+            ],
+        ])->save();
+
+        Sanctum::actingAs($readonly);
+
+        $this->getJson("/api/v1/admin/payouts/{$batch->public_id}")
+            ->assertOk()
+            ->assertJsonPath('data.payout_batch.items.0.organization.stripe_connect_account_id', null)
+            ->assertJsonPath('data.payout_batch.items.0.stripe_transfer_id', null)
+            ->assertJsonPath('data.payout_batch.items.0.failure_reason', null)
+            ->assertJsonPath('data.payout_batch.items.0.metadata', null);
+
+        Sanctum::actingAs($finance);
+
+        $this->getJson("/api/v1/admin/payouts/{$batch->public_id}")
+            ->assertOk()
+            ->assertJsonPath('data.payout_batch.items.0.organization.stripe_connect_account_id', 'acct_sensitive')
+            ->assertJsonPath('data.payout_batch.items.0.stripe_transfer_id', 'tr_sensitive')
+            ->assertJsonPath('data.payout_batch.items.0.failure_reason', 'Processor returned sensitive provider detail.')
+            ->assertJsonPath('data.payout_batch.items.0.metadata.processor_response', 'provider-internal-value');
     }
 
     protected function auditCount(string $action, string $entityId): int

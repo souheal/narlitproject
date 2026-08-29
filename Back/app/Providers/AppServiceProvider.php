@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Support\ProductionSecurityGuard;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -25,6 +26,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        app(ProductionSecurityGuard::class)->validate();
+
         $this->configureAdminRateLimiters();
 
         Gate::before(function (User $user, string $ability): ?bool {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Admin\AdminSecurityAuditService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -57,16 +58,29 @@ class AdminManagementController extends Controller
         $roles = array_values(array_unique($validated['roles']));
 
         if ($target->id === $request->user()->id && ! $request->user()->hasRole('super_admin')) {
+            app(AdminSecurityAuditService::class)->log($request->user(), 'admin.roles_update_failed', $request, [
+                'status' => 'failure',
+                'reason' => 'self_escalation_denied',
+                'requested_roles' => $roles,
+            ], 'user', $target->public_id);
+
             throw new ApiException('You cannot escalate your own admin privileges.', 422);
         }
 
-        return DB::transaction(function () use ($request, $target, $roles): JsonResponse {
-            $oldRoles = $target->safeAdminRoleNames();
+        $oldRoles = $target->safeAdminRoleNames();
 
-            if (in_array('super_admin', $oldRoles, true) && ! in_array('super_admin', $roles, true) && $this->activeSuperAdminCount() <= 1) {
-                throw new ApiException('You cannot remove the last active super admin.', 422);
-            }
+        if (in_array('super_admin', $oldRoles, true) && ! in_array('super_admin', $roles, true) && $this->activeSuperAdminCount() <= 1) {
+            app(AdminSecurityAuditService::class)->log($request->user(), 'admin.roles_update_failed', $request, [
+                'status' => 'failure',
+                'reason' => 'last_super_admin',
+                'old_roles' => $oldRoles,
+                'requested_roles' => $roles,
+            ], 'user', $target->public_id);
 
+            throw new ApiException('You cannot remove the last active super admin.', 422);
+        }
+
+        return DB::transaction(function () use ($request, $target, $roles, $oldRoles): JsonResponse {
             $target->syncRoles($roles);
             app(PermissionRegistrar::class)->forgetCachedPermissions();
 

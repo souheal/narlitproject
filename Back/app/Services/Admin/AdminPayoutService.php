@@ -103,6 +103,15 @@ class AdminPayoutService
             ];
         }
 
+        if (PayoutBatch::query()->whereDate('batch_month', $batchMonth)->exists()) {
+            $this->log($admin, 'payout_batch', $batchMonth->toDateString(), 'payout_batch.generation_failed', $request, [
+                'status' => 'failure',
+                'reason' => 'duplicate_batch',
+            ]);
+
+            throw new ApiException('A payout batch already exists for this month.', 409);
+        }
+
         return DB::transaction(function () use ($admin, $batchMonth, $calculation, $request): array {
             if (PayoutBatch::query()->whereDate('batch_month', $batchMonth)->lockForUpdate()->exists()) {
                 throw new ApiException('A payout batch already exists for this month.', 409);
@@ -160,6 +169,12 @@ class AdminPayoutService
         }
 
         if (! in_array($batch->status, ['pending', 'failed'], true)) {
+            $this->log($admin, 'payout_batch', $batch->public_id, 'payout_batch.execution_failed', $request, [
+                'status' => 'failure',
+                'reason' => 'invalid_status',
+                'batch_status' => $batch->status,
+            ]);
+
             throw new ApiException('Only pending or failed payout batches can be executed.', 422);
         }
 
@@ -217,10 +232,21 @@ class AdminPayoutService
         }
 
         if (! in_array($batch->status, ['pending', 'failed'], true)) {
+            $this->log($admin, 'payout_batch', $batch->public_id, 'payout_batch.cancel_failed', $request, [
+                'status' => 'failure',
+                'reason' => 'invalid_status',
+                'batch_status' => $batch->status,
+            ]);
+
             throw new ApiException('Only unprocessed payout batches can be canceled.', 422);
         }
 
         if ($batch->items->contains(fn (PayoutItem $item): bool => $item->transfer_status === 'completed' || $item->stripe_transfer_id !== null)) {
+            $this->log($admin, 'payout_batch', $batch->public_id, 'payout_batch.cancel_failed', $request, [
+                'status' => 'failure',
+                'reason' => 'transfer_records_exist',
+            ]);
+
             throw new ApiException('This payout batch has transfer records and cannot be canceled.', 422);
         }
 

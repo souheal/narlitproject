@@ -40,38 +40,47 @@ class FortifyServiceProvider extends ServiceProvider
 
         RateLimiter::for('auth.login', fn (Request $request) => [
             Limit::perMinutes(15, 5)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinutes(15, 30)->by($request->ip()),
         ]);
 
         RateLimiter::for('auth.otp.verify', fn (Request $request) => [
             Limit::perMinutes(10, 5)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinute(20)->by($request->ip()),
         ]);
 
         RateLimiter::for('auth.otp.resend', fn (Request $request) => [
             Limit::perMinutes(10, 3)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinute(20)->by($request->ip()),
         ]);
 
         RateLimiter::for('auth.phone_mfa.verify', fn (Request $request) => [
             Limit::perMinutes(10, 5)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinute(20)->by($request->ip()),
         ]);
 
         RateLimiter::for('auth.phone_mfa.resend', fn (Request $request) => [
             Limit::perMinutes(10, 3)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinute(20)->by($request->ip()),
         ]);
 
         RateLimiter::for('auth.password.forgot', fn (Request $request) => [
             Limit::perMinutes(10, 3)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinute(20)->by($request->ip()),
         ]);
 
         RateLimiter::for('auth.password.verify', fn (Request $request) => [
             Limit::perMinutes(10, 5)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinute(20)->by($request->ip()),
         ]);
 
         RateLimiter::for('auth.password.reset', fn (Request $request) => [
             Limit::perMinutes(10, 5)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinute(20)->by($request->ip()),
         ]);
 
         RateLimiter::for('billing.checkout', fn (Request $request) => [
             Limit::perMinutes(10, 5)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinute(20)->by($request->ip()),
         ]);
 
         RateLimiter::for('billing.webhook', fn (Request $request) => [

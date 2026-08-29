@@ -99,6 +99,34 @@ Completed idempotency records expire after `IDEMPOTENCY_TTL_HOURS`, defaulting t
 php artisan idempotency:cleanup
 ```
 
+## Production Security Checklist
+
+This project can remain in local development mode while production safeguards are implemented. Only use the following settings in a real production deployment environment:
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+STRIPE_FAKE_CHECKOUT=false
+SESSION_SECURE_COOKIE=true
+SESSION_ENCRYPT=true
+```
+
+Production must run behind HTTPS. HSTS is sent only when the Laravel app is running in production and the incoming request is HTTPS.
+
+Configure real AWS, Stripe, database, mail, and webhook secrets through environment variables managed by the deployment platform. Never commit `.env`, production secrets, `APP_KEY`, AWS credentials, Stripe secrets, webhook secrets, or database passwords to repository files.
+
+After production environment variables change, rebuild Laravel's configuration cache:
+
+```bash
+php artisan config:cache
+```
+
+Expired Sanctum tokens can be cleaned up with:
+
+```bash
+php artisan sanctum:cleanup-expired-tokens
+```
+
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).

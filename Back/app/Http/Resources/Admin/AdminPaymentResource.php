@@ -5,6 +5,7 @@ namespace App\Http\Resources\Admin;
 use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Schema;
 
 class AdminPaymentResource extends JsonResource
 {
@@ -22,8 +23,17 @@ class AdminPaymentResource extends JsonResource
             'status' => $payment->status,
             'paid_at' => $payment->paid_at?->toIso8601String(),
             'refunded_at' => $payment->refunded_at?->toIso8601String(),
-            'stripe_payment_intent' => $payment->stripe_payment_intent,
-            'stripe_invoice_id' => $payment->stripe_invoice_id,
+            'stripe_payment_intent' => $this->canViewStripeIdentifiers($request) ? $payment->stripe_payment_intent : null,
+            'stripe_invoice_id' => $this->canViewStripeIdentifiers($request) ? $payment->stripe_invoice_id : null,
         ];
+    }
+
+    protected function canViewStripeIdentifiers(Request $request): bool
+    {
+        if (! Schema::hasTable('permissions')) {
+            return false;
+        }
+
+        return (bool) $request->user()?->can('payments.refund');
     }
 }

@@ -91,6 +91,13 @@ class AdminRolePermissionTest extends TestCase
         ])
             ->assertStatus(422)
             ->assertJsonPath('message', 'You cannot remove the last active super admin.');
+
+        $this->assertDatabaseHas('admin_logs', [
+            'admin_id' => $superAdmin->id,
+            'action' => 'admin.roles_update_failed',
+            'entity_type' => 'user',
+            'entity_id' => $superAdmin->public_id,
+        ]);
     }
 
     public function test_role_changes_take_effect_on_next_request(): void

@@ -121,6 +121,60 @@ class AdminSecurityHardeningTest extends TestCase
         $this->assertSame(0, $admin->tokens()->count());
     }
 
+    public function test_admin_login_and_mfa_security_events_are_audited_without_codes(): void
+    {
+        $admin = $this->userWithRole('admin', 'audited-admin@test.com', false);
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $admin->email,
+            'password' => 'WrongPassword123!',
+        ])->assertStatus(422);
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $admin->email,
+            'password' => 'Password123!',
+        ])->assertOk();
+
+        $this->postJson('/api/v1/auth/resend-phone-mfa', [
+            'email' => $admin->email,
+        ])->assertOk();
+
+        $this->postJson('/api/v1/auth/verify-phone-mfa', [
+            'email' => $admin->email,
+            'code' => '000000',
+        ])->assertStatus(422);
+
+        $mfaCode = app(PhoneMfaService::class)->previewForUser($admin->refresh());
+
+        $this->postJson('/api/v1/auth/verify-phone-mfa', [
+            'email' => $admin->email,
+            'code' => $mfaCode,
+        ])->assertOk();
+
+        foreach ([
+            'auth.admin_login_failed',
+            'auth.admin_login_password_verified',
+            'auth.admin_mfa_resent',
+            'auth.admin_mfa_failed',
+            'auth.admin_mfa_completed',
+        ] as $action) {
+            $this->assertDatabaseHas('admin_logs', [
+                'admin_id' => $admin->id,
+                'action' => $action,
+                'entity_type' => 'user',
+                'entity_id' => $admin->public_id,
+            ]);
+        }
+
+        $metadata = DB::table('admin_logs')
+            ->where('admin_id', $admin->id)
+            ->pluck('metadata')
+            ->implode(' ');
+
+        $this->assertStringNotContainsString((string) $mfaCode, $metadata);
+        $this->assertStringNotContainsString('Password123!', $metadata);
+    }
+
     public function test_enrolled_admin_still_requires_phone_mfa_on_every_login(): void
     {
         $admin = $this->userWithRole('admin', 'enrolled-admin@test.com', true);

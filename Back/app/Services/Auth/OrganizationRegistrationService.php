@@ -50,6 +50,7 @@ class OrganizationRegistrationService
                     'failed_login_attempts' => 0,
                 ]);
 
+                // Integrate malware scanning here before storing if an antivirus service is added.
                 $certificatePath = $certificatePdf->storeAs(
                     'organization-certificates/'.$user->public_id,
                     (string) Str::uuid().'.pdf',
@@ -74,7 +75,7 @@ class OrganizationRegistrationService
                     'organization_profile_id' => $profile->id,
                     'type' => 'certificate',
                     'file_path' => $certificatePath,
-                    'mime_type' => $certificatePdf->getClientMimeType(),
+                    'mime_type' => $certificatePdf->getMimeType(),
                     'file_size' => $certificatePdf->getSize(),
                     'uploaded_by' => $user->id,
                     'uploaded_at' => now(),

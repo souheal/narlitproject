@@ -2,9 +2,15 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Http\Resources\Admin\AdminPaymentResource;
+use App\Http\Resources\Admin\AdminPayoutItemResource;
+use App\Http\Resources\Admin\AdminSubscriptionDetailResource;
+use App\Http\Resources\Admin\AdminSubscriptionResource;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Tests\Feature\Admin\Concerns\InteractsWithCriticalAdminData;
 use Tests\TestCase;
@@ -188,6 +194,100 @@ class AdminCriticalFinanceTest extends TestCase
         Sanctum::actingAs($readonly);
         $this->withHeader('Idempotency-Key', (string) str()->uuid())->postJson("/api/v1/admin/subscriptions/{$subscription->public_id}/cancel")
             ->assertForbidden();
+    }
+
+    public function test_subscription_stripe_identifiers_require_finance_permission(): void
+    {
+        $finance = $this->createAdminWithRole('admin_finance');
+        $settings = $this->createAdminWithRole('admin_settings');
+        $readonly = $this->createAdminWithRole('admin_readonly');
+        $member = $this->createUserWithRole('subscriber');
+        $subscription = $this->createActiveSubscription($member, [
+            'stripe_customer_id' => 'cus_sensitive',
+            'stripe_subscription_id' => 'sub_sensitive',
+        ]);
+
+        Sanctum::actingAs($settings);
+        $this->getJson('/api/v1/admin/subscriptions')
+            ->assertOk()
+            ->assertJsonPath('data.subscriptions.data.0.public_id', $subscription->public_id)
+            ->assertJsonPath('data.subscriptions.data.0.stripe_customer_id', null)
+            ->assertJsonPath('data.subscriptions.data.0.stripe_subscription_id', null)
+            ->assertJsonPath('data.subscriptions.data.0.stripe_links.customer', null)
+            ->assertJsonPath('data.subscriptions.data.0.stripe_links.subscription', null);
+
+        Sanctum::actingAs($readonly);
+        $this->getJson('/api/v1/admin/subscriptions')
+            ->assertOk()
+            ->assertJsonPath('data.subscriptions.data.0.public_id', $subscription->public_id)
+            ->assertJsonPath('data.subscriptions.data.0.amount', '7.00')
+            ->assertJsonPath('data.subscriptions.data.0.status', 'active')
+            ->assertJsonPath('data.subscriptions.data.0.stripe_customer_id', null)
+            ->assertJsonPath('data.subscriptions.data.0.stripe_subscription_id', null)
+            ->assertJsonPath('data.subscriptions.data.0.stripe_links.customer', null)
+            ->assertJsonPath('data.subscriptions.data.0.stripe_links.subscription', null);
+
+        Sanctum::actingAs($finance);
+        $this->getJson('/api/v1/admin/subscriptions')
+            ->assertOk()
+            ->assertJsonPath('data.subscriptions.data.0.public_id', $subscription->public_id)
+            ->assertJsonPath('data.subscriptions.data.0.stripe_customer_id', 'cus_sensitive')
+            ->assertJsonPath('data.subscriptions.data.0.stripe_subscription_id', 'sub_sensitive')
+            ->assertJsonPath('data.subscriptions.data.0.stripe_links.customer', 'https://dashboard.stripe.com/customers/cus_sensitive')
+            ->assertJsonPath('data.subscriptions.data.0.stripe_links.subscription', 'https://dashboard.stripe.com/subscriptions/sub_sensitive');
+    }
+
+    public function test_sensitive_admin_resources_fail_closed_when_permission_state_is_unavailable(): void
+    {
+        $finance = $this->createAdminWithRole('admin_finance');
+        $member = $this->createUserWithRole('subscriber');
+        $subscription = $this->createActiveSubscription($member, [
+            'stripe_customer_id' => 'cus_fail_closed',
+            'stripe_subscription_id' => 'sub_fail_closed',
+        ]);
+        $payment = $this->createRefundablePayment($member, $subscription, [
+            'stripe_payment_intent' => 'pi_fail_closed',
+            'stripe_invoice_id' => 'in_fail_closed',
+        ]);
+        $organization = $this->createOrganizationProfile([
+            'stripe_connect_account_id' => 'acct_fail_closed',
+        ]);
+        $batch = $this->createPendingPayoutBatch($organization);
+        $payoutItem = $batch->items()->firstOrFail();
+        $payoutItem->forceFill([
+            'stripe_transfer_id' => 'tr_fail_closed',
+            'metadata' => [
+                'failure_reason' => 'Sensitive provider detail.',
+            ],
+        ])->save();
+
+        $subscription->setRelation('payments', collect([$payment]));
+        $subscription->setAttribute('admin_action_history', collect());
+
+        $request = Request::create('/api/v1/admin/test');
+        $request->setUserResolver(fn () => $finance);
+
+        Schema::partialMock()
+            ->shouldReceive('hasTable')
+            ->with('permissions')
+            ->andReturn(false);
+
+        $paymentData = (new AdminPaymentResource($payment))->toArray($request);
+        $subscriptionData = (new AdminSubscriptionResource($subscription))->toArray($request);
+        $subscriptionDetailData = (new AdminSubscriptionDetailResource($subscription))->toArray($request);
+        $payoutData = (new AdminPayoutItemResource($payoutItem))->toArray($request);
+
+        $this->assertNull($paymentData['stripe_payment_intent']);
+        $this->assertNull($paymentData['stripe_invoice_id']);
+        $this->assertNull($subscriptionData['stripe_customer_id']);
+        $this->assertNull($subscriptionData['stripe_subscription_id']);
+        $this->assertNull($subscriptionData['stripe_links']['customer']);
+        $this->assertNull($subscriptionDetailData['payments'][0]['stripe_payment_intent']);
+        $this->assertNull($subscriptionDetailData['payments'][0]['stripe_links']['invoice']);
+        $this->assertNull($payoutData['organization']['stripe_connect_account_id']);
+        $this->assertNull($payoutData['stripe_transfer_id']);
+        $this->assertNull($payoutData['failure_reason']);
+        $this->assertNull($payoutData['metadata']);
     }
 
     protected function auditCount(string $action, string $entityId): int

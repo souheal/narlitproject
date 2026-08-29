@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\ResendPhoneMfaRequest;
 use App\Http\Requests\Auth\VerifyPhoneMfaRequest;
 use App\Models\User;
+use App\Services\Admin\AdminSecurityAuditService;
 use App\Services\Auth\LoginService;
 use App\Services\Auth\PhoneMfaService;
 use App\Services\Billing\SubscriptionService;
@@ -26,8 +27,20 @@ class PhoneMfaController extends Controller
 
     public function verify(VerifyPhoneMfaRequest $request): JsonResponse
     {
-        $user = $this->resolveEligibleUser($request->validated('email'));
-        $result = $this->loginService->completePhoneMfa($user, $request->validated('code'), $request);
+        $user = $this->resolveEligibleUser($request->validated('email'), true);
+
+        try {
+            $result = $this->loginService->completePhoneMfa($user, $request->validated('code'), $request);
+        } catch (ApiException $exception) {
+            if ($user->isAdminAccount()) {
+                app(AdminSecurityAuditService::class)->log($user, 'auth.admin_mfa_failed', $request, [
+                    'status' => 'failure',
+                    'reason' => $this->safeMfaFailureReason($exception),
+                ]);
+            }
+
+            throw $exception;
+        }
 
         $isAdmin = $this->loginService->isAdmin($result['user']);
 
@@ -50,6 +63,10 @@ class PhoneMfaController extends Controller
         $response = $this->success($isAdmin ? 'Phone verification completed.' : 'Login successful.', $data);
 
         if ($isAdmin) {
+            app(AdminSecurityAuditService::class)->log($result['user'], 'auth.admin_mfa_completed', $request, [
+                'status' => 'success',
+            ]);
+
             $response->withCookie($this->adminTokenCookie($result['token']));
         }
 
@@ -58,17 +75,26 @@ class PhoneMfaController extends Controller
 
     public function resend(ResendPhoneMfaRequest $request): JsonResponse
     {
-        $user = $this->resolveEligibleUser($request->validated('email'));
+        $user = $this->resolveEligibleUser($request->validated('email'), false);
+
+        if ($user === null) {
+            return $this->neutralResendResponse();
+        }
 
         if (! $user->isAdminAccount() && $user->first_login_mfa_completed_at !== null) {
-            throw new ApiException('Phone verification has already been completed.', 409);
+            return $this->neutralResendResponse();
         }
 
         $mfaPayload = $this->phoneMfaService->issueForUser($user);
 
+        if ($user->isAdminAccount()) {
+            app(AdminSecurityAuditService::class)->log($user, 'auth.admin_mfa_resent', $request, [
+                'status' => 'success',
+            ]);
+        }
+
         $data = [
             'next_step' => 'phone_mfa_required',
-            'phone_mfa_expires_at' => $mfaPayload['expires_at']->toIso8601String(),
         ];
 
         if (app()->environment('local')) {
@@ -78,31 +104,56 @@ class PhoneMfaController extends Controller
         return $this->success('A new phone verification code has been sent.', $data);
     }
 
-    protected function resolveEligibleUser(string $email): User
+    protected function resolveEligibleUser(string $email, bool $forVerification): ?User
     {
         $user = User::query()->where('email', $email)->first();
 
         if ($user === null) {
-            throw new ApiException('No account was found for the provided email address.', 404);
+            return $this->neutralFailure($forVerification);
         }
 
         if ($user->email_verified_at === null) {
-            throw new ApiException('Please verify your email before continuing.', 403);
+            return $this->neutralFailure($forVerification);
         }
 
         if ($user->isAdminAccount()) {
             if (! $user->is_active) {
-                throw new ApiException('Admin account is not active.', 403);
+                return $this->neutralFailure($forVerification);
             }
 
             return $user;
         }
 
         if (! $user->is_active || ! $this->subscriptionService->userHasRequiredAccess($user)) {
-            throw new ApiException('Please complete your subscription before logging in.', 403);
+            return $this->neutralFailure($forVerification);
         }
 
         return $user;
+    }
+
+    protected function neutralFailure(bool $forVerification): ?User
+    {
+        if ($forVerification) {
+            throw new ApiException('Please enter a valid verification code.', 422);
+        }
+
+        return null;
+    }
+
+    protected function neutralResendResponse(): JsonResponse
+    {
+        return $this->success('A new phone verification code has been sent.', [
+            'next_step' => 'phone_mfa_required',
+        ]);
+    }
+
+    protected function safeMfaFailureReason(ApiException $exception): string
+    {
+        return match ($exception->getMessage()) {
+            'The verification code has expired.' => 'expired_code',
+            'Please request a new phone verification code.' => 'missing_or_used_code',
+            default => 'invalid_code',
+        };
     }
 
     protected function adminTokenCookie(string $token): Cookie

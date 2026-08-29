@@ -8,6 +8,7 @@ use App\Http\Requests\Auth\ResendOtpRequest;
 use App\Http\Requests\Auth\VerifyOtpRequest;
 use App\Models\User;
 use App\Services\Auth\OtpService;
+use App\Services\Billing\CheckoutContinuationTokenService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Schema;
@@ -18,6 +19,7 @@ class OtpVerificationController extends Controller
 
     public function __construct(
         protected OtpService $otpService,
+        protected CheckoutContinuationTokenService $checkoutTokens,
     ) {
     }
 
@@ -26,7 +28,7 @@ class OtpVerificationController extends Controller
         $user = User::query()->where('email', $request->validated('email'))->first();
 
         if ($user === null) {
-            throw new ApiException('No registration was found for the provided email address.', 404);
+            throw new ApiException('Please enter a valid verification code.', 422);
         }
 
         $verifiedUser = $this->otpService->verify($user, $request->validated('otp'));
@@ -47,6 +49,8 @@ class OtpVerificationController extends Controller
             ]);
         }
 
+        $checkoutToken = $this->checkoutTokens->issueForUser($verifiedUser);
+
         return $this->success('Email verified successfully.', [
             'user' => [
                 'public_id' => $verifiedUser->public_id,
@@ -54,7 +58,9 @@ class OtpVerificationController extends Controller
                 'email_verified_at' => $verifiedUser->email_verified_at?->toIso8601String(),
                 'is_active' => $verifiedUser->is_active,
             ],
-            'next_step' => 'payment',
+            'next_step' => 'checkout',
+            'checkout_token' => $checkoutToken,
+            'checkout_token_expires_at' => $this->checkoutTokens->expiresAt($verifiedUser)?->toIso8601String(),
         ]);
     }
 
@@ -63,21 +69,26 @@ class OtpVerificationController extends Controller
         $user = User::query()->where('email', $request->validated('email'))->first();
 
         if ($user === null) {
-            throw new ApiException('No registration was found for the provided email address.', 404);
+            return $this->neutralResendResponse();
         }
 
-        $otpPayload = $this->otpService->issueForUser($user);
+        $this->otpService->issueForUser($user);
 
         $data = [
-            'otp_expires_at' => $otpPayload['expires_at']->toIso8601String(),
+            'next_step' => 'verify_email',
         ];
 
         if (app()->environment('local')) {
             $data['otp'] = $this->otpService->previewForUser($user);
         }
 
-        $data['next_step'] = 'verify_email';
-
         return $this->success('A new verification code has been sent.', $data);
+    }
+
+    protected function neutralResendResponse(): JsonResponse
+    {
+        return $this->success('A new verification code has been sent.', [
+            'next_step' => 'verify_email',
+        ]);
     }
 }

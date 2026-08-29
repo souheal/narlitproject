@@ -7,6 +7,7 @@ use App\Models\Subscription;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 class AdminSubscriptionDetailResource extends JsonResource
 {
@@ -26,11 +27,11 @@ class AdminSubscriptionDetailResource extends JsonResource
                 'status' => $payment->status,
                 'paid_at' => $payment->paid_at?->toIso8601String(),
                 'refunded_at' => $payment->refunded_at?->toIso8601String(),
-                'stripe_payment_intent' => $payment->stripe_payment_intent,
-                'stripe_invoice_id' => $payment->stripe_invoice_id,
+                'stripe_payment_intent' => $this->canViewStripeIdentifiers($request) ? $payment->stripe_payment_intent : null,
+                'stripe_invoice_id' => $this->canViewStripeIdentifiers($request) ? $payment->stripe_invoice_id : null,
                 'stripe_links' => [
-                    'payment' => $this->stripePaymentLink($payment->stripe_payment_intent),
-                    'invoice' => $this->stripeInvoiceLink($payment->stripe_invoice_id),
+                    'payment' => $this->canViewStripeIdentifiers($request) ? $this->stripePaymentLink($payment->stripe_payment_intent) : null,
+                    'invoice' => $this->canViewStripeIdentifiers($request) ? $this->stripeInvoiceLink($payment->stripe_invoice_id) : null,
                 ],
             ])->all(),
             'admin_action_history' => $subscription->getAttribute('admin_action_history')
@@ -51,6 +52,15 @@ class AdminSubscriptionDetailResource extends JsonResource
         }
 
         return "https://dashboard.stripe.com/payments/{$id}";
+    }
+
+    protected function canViewStripeIdentifiers(Request $request): bool
+    {
+        if (! Schema::hasTable('permissions')) {
+            return false;
+        }
+
+        return (bool) $request->user()?->can('payments.refund');
     }
 
     protected function stripeInvoiceLink(?string $id): ?string

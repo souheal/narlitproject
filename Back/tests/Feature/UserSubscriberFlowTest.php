@@ -62,15 +62,21 @@ class UserSubscriberFlowTest extends TestCase
 
         $this->assertNotNull($otp);
 
-        $this->postJson('/api/v1/auth/verify-otp', [
+        $verification = $this->postJson('/api/v1/auth/verify-otp', [
             'email' => 'muhannad@test.com',
             'otp' => $otp,
-        ])
+        ]);
+
+        $verification
             ->assertOk()
-            ->assertJsonPath('data.next_step', 'payment');
+            ->assertJsonPath('data.next_step', 'checkout')
+            ->assertJsonStructure(['data' => ['checkout_token']]);
+
+        $checkoutToken = (string) $verification->json('data.checkout_token');
 
         $this->postJson('/api/v1/billing/checkout', [
             'email' => 'muhannad@test.com',
+            'checkout_token' => $checkoutToken,
             'subscription_plan' => 'monthly',
         ])
             ->assertOk()
@@ -164,6 +170,11 @@ class UserSubscriberFlowTest extends TestCase
             $table->string('otp_code')->nullable();
             $table->timestamp('otp_expires_at')->nullable();
             $table->timestamp('email_verified_at')->nullable();
+            $table->string('checkout_token_hash')->nullable();
+            $table->timestamp('checkout_token_expires_at')->nullable();
+            $table->timestamp('checkout_token_consumed_at')->nullable();
+            $table->string('checkout_replay_message')->nullable();
+            $table->json('checkout_replay_data')->nullable();
             $table->string('phone_mfa_code')->nullable();
             $table->timestamp('phone_mfa_expires_at')->nullable();
             $table->timestamp('phone_mfa_verified_at')->nullable();

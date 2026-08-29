@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
@@ -44,6 +45,34 @@ class RegisterOrganizationRequest extends FormRequest
                 Rule::unique('organization_profiles', 'tax_id')->whereNull('deleted_at'),
             ],
             'certificate_pdf' => ['required', 'file', 'mimetypes:application/pdf', 'max:10240'],
+        ];
+    }
+
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $file = $this->file('certificate_pdf');
+
+                if ($file === null || ! $file->isValid()) {
+                    return;
+                }
+
+                $handle = @fopen($file->getRealPath(), 'rb');
+
+                if ($handle === false) {
+                    $validator->errors()->add('certificate_pdf', 'Please upload a valid certificate of incorporation PDF.');
+
+                    return;
+                }
+
+                $signature = fread($handle, 5);
+                fclose($handle);
+
+                if ($signature !== '%PDF-') {
+                    $validator->errors()->add('certificate_pdf', 'The certificate of incorporation must be a valid PDF file.');
+                }
+            },
         ];
     }
 

@@ -1,12 +1,14 @@
 <?php
 
 use App\Console\Commands\CleanupIdempotencyKeys;
+use App\Console\Commands\CleanupExpiredSanctumTokens;
 use App\Console\Commands\ImportIrsExemptOrganizations;
 use App\Exceptions\ApiException;
 use App\Http\Middleware\EnsureAdminAccess;
 use App\Http\Middleware\EnsureIdempotency;
 use App\Http\Middleware\EnsureNarLitUserAccess;
 use App\Http\Middleware\EnsurePermission;
+use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\UseAdminTokenCookieForSanctum;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -27,10 +29,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withCommands([
+        CleanupExpiredSanctumTokens::class,
         CleanupIdempotencyKeys::class,
         ImportIrsExemptOrganizations::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->append([
+            SecurityHeaders::class,
+        ]);
         $middleware->statefulApi();
         $middleware->api(prepend: [
             UseAdminTokenCookieForSanctum::class,
@@ -86,5 +92,9 @@ return Application::configure(basePath: dirname(__DIR__))
                 'message' => 'You do not have permission to perform this action.',
                 'errors' => [],
             ], 403);
+        });
+
+        $exceptions->respond(function ($response, Throwable $exception, Request $request) {
+            return SecurityHeaders::apply($response, $request);
         });
     })->create();
