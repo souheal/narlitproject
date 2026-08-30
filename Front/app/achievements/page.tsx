@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface Achievement {
   key: string;
@@ -38,28 +40,33 @@ export default function AchievementsPage() {
   const [data, setData] = useState<AchievementsPayload | null>(null);
   const [filter, setFilter] = useState<"all" | "earned" | "locked">("all");
   const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [meRes, achRes] = await Promise.all([apiFetch("/auth/me"), apiFetch("/member/achievements")]);
+      const meData = await meRes.json();
+      const achData = await achRes.json();
+      setUser(meData.data?.user ?? meData.data ?? null);
+      if (achRes.ok) setData(achData.data ?? null);
+      else setError(achData?.message ?? "Failed to load achievements.");
+    } catch { setError("Failed to load achievements."); }
+    setLoading(false);
+  }
 
   useEffect(() => {
     validateSession().then(async (valid) => {
       if (!valid) { clearToken(); window.location.href = "/login"; return; }
-      try {
-        const [meRes, achRes] = await Promise.all([apiFetch("/auth/me"), apiFetch("/member/achievements")]);
-        const meData = await meRes.json();
-        const achData = await achRes.json();
-        setUser(meData.data?.user ?? meData.data ?? null);
-        if (achRes.ok) setData(achData.data ?? null);
-        else setError(achData?.message ?? "Failed to load achievements.");
-      } catch { setError("Failed to load achievements."); }
       setChecking(false);
+      load();
     });
   }, []);
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -113,9 +120,31 @@ export default function AchievementsPage() {
             ))}
           </div>
 
-          {filtered.length === 0 && <p className="hm-empty">No achievements here.</p>}
+          {loading && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }} aria-busy="true" aria-label="Loading badges">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="hm-panel" style={{ padding: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+                    <Skeleton width={48} height={48} radius={24} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+                    <Skeleton width="70%" height={14} />
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <SkeletonText lines={2} />
+                  </div>
+                  <Skeleton width="100%" height={6} radius={3} />
+                  <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
+                    <Skeleton width={60} height={10} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
-          {Object.entries(grouped).map(([category, list]) => (
+          {!loading && filtered.length === 0 && <p className="hm-empty">No achievements here.</p>}
+
+          {!loading && Object.entries(grouped).map(([category, list]) => (
             <div key={category} style={{ marginBottom: 32 }}>
               <h3 style={{ fontSize: "1rem", color: "var(--muted)", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 {category}

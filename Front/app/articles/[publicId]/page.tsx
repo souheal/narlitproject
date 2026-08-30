@@ -4,6 +4,8 @@ import { use, useEffect, useRef, useState } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface RelatedArticle {
   public_id: string;
@@ -42,6 +44,7 @@ export default function ArticleDetailPage({
   const [user, setUser] = useState<User | null>(null);
   const [article, setArticle] = useState<ArticleDetail | null>(null);
   const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [readingSeconds, setReadingSeconds] = useState(0);
   const [markedRead, setMarkedRead] = useState(false);
@@ -57,11 +60,12 @@ export default function ArticleDetailPage({
         window.location.href = `/login?next=/articles/${publicId}`;
         return;
       }
-      try {
-        const meRes = await apiFetch("/auth/me");
-        const meData = await meRes.json();
-        setUser(meData.data?.user ?? meData.data ?? null);
-      } catch { /* ignore */ }
+      setChecking(false);
+      apiFetch("/auth/me")
+        .then((r) => r.json())
+        .then((d) => setUser(d.data?.user ?? d.data ?? null))
+        .catch(() => {});
+      setLoading(true);
       try {
         const res = await apiFetch(`/articles/${publicId}`);
         const payload = await res.json();
@@ -73,7 +77,7 @@ export default function ArticleDetailPage({
       } catch {
         setError("Failed to load article.");
       }
-      setChecking(false);
+      setLoading(false);
       startedAt.current = Date.now();
     });
   }, [publicId]);
@@ -153,10 +157,42 @@ export default function ArticleDetailPage({
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" />
-        <span className="hm-loading-dot" />
-        <span className="hm-loading-dot" />
+      <BrandLoader />
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="hm-shell" suppressHydrationWarning>
+        <MemberNav initials={initials} name={user?.full_name} email={user?.email} />
+        <main className="hm-main">
+          <article className="hm-section" style={{ maxWidth: 760, margin: "0 auto" }} aria-busy="true" aria-label="Loading article">
+            <Skeleton width={120} height={12} />
+            <div className="hm-article-top" style={{ marginTop: 16 }}>
+              <Skeleton width={100} height={12} />
+              <Skeleton width={70} height={12} />
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <Skeleton width="90%" height={32} />
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <SkeletonText lines={2} />
+            </div>
+            <div className="hm-article-footer" style={{ marginTop: 16, marginBottom: 24 }}>
+              <Skeleton width={180} height={12} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <Skeleton width={80} height={32} radius={999} />
+                <Skeleton width={80} height={32} radius={999} />
+              </div>
+            </div>
+            <div style={{ marginTop: 20 }}>
+              <SkeletonText lines={8} />
+            </div>
+            <div style={{ marginTop: 20 }}>
+              <SkeletonText lines={6} />
+            </div>
+          </article>
+        </main>
       </div>
     );
   }

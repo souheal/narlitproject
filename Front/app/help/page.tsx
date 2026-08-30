@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState, useTransition } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface Faq {
   question: string;
@@ -111,9 +112,7 @@ export default function HelpPage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -137,7 +136,7 @@ export default function HelpPage() {
               <h3 className="hm-panel-title">Email support</h3>
               <p className="hm-panel-sub">support@narlit.com · replies within 1 business day</p>
             </a>
-            <a href="https://narlit.com/status" target="_blank" rel="noreferrer" className="hm-panel" style={{ textDecoration: "none", color: "inherit", padding: 20 }}>
+            <a href="https://narlit.com/status" target="_blank" rel="noopener noreferrer" className="hm-panel" style={{ textDecoration: "none", color: "inherit", padding: 20 }}>
               <div style={{ fontSize: "2rem" }}>📡</div>
               <h3 className="hm-panel-title">System status</h3>
               <p className="hm-panel-sub">Check whether NarLit is running smoothly</p>

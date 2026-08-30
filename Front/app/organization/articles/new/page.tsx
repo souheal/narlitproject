@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState, useTransition } from "react";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { BrandLoader } from "@/components/BrandLoader";
 
 const CATEGORIES = [
   "Civil Rights",
@@ -77,11 +78,7 @@ export default function NewArticlePage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" />
-        <span className="hm-loading-dot" />
-        <span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 

@@ -20,7 +20,12 @@
       "Bash(tee /tmp/tsc7.txt)",
       "Bash(tee /tmp/tsc8.txt)",
       "Bash(tee /tmp/tsc9.txt)",
-      "Bash(tee /tmp/tsc10.txt)"
+      "Bash(tee /tmp/tsc10.txt)",
+      "Bash(curl *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(php artisan *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('message:', d.get\\('message'\\)\\); tk=d.get\\('data',{}\\).get\\('tickets',{}\\); print\\('count:', tk.get\\('total'\\)\\); print\\('summary:', d.get\\('data',{}\\).get\\('summary'\\)\\)\")",
+      "Bash(node *)"
     ]
   }
 }

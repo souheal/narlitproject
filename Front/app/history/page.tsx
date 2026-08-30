@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { Skeleton } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface ReadEntry {
   public_id: string;
@@ -37,7 +39,7 @@ export default function HistoryPage() {
   const [data, setData] = useState<HistoryPayload | null>(null);
   const [page, setPage] = useState(1);
   const [checking, setChecking] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   async function load(p: number) {
@@ -54,21 +56,18 @@ export default function HistoryPage() {
   useEffect(() => {
     validateSession().then(async (valid) => {
       if (!valid) { clearToken(); window.location.href = "/login"; return; }
-      try {
-        const meRes = await apiFetch("/auth/me");
-        const meData = await meRes.json();
-        setUser(meData.data?.user ?? meData.data ?? null);
-      } catch { /* ignore */ }
-      await load(1);
       setChecking(false);
+      apiFetch("/auth/me")
+        .then((r) => r.json())
+        .then((d) => setUser(d.data?.user ?? d.data ?? null))
+        .catch(() => {});
+      load(1);
     });
   }, []);
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -90,7 +89,25 @@ export default function HistoryPage() {
             <h2 className="hm-section-title">Reading history</h2>
             <p className="hm-panel-sub">{reads?.total ?? 0} entries in total</p>
 
-            {loading && <p className="hm-empty">Loading…</p>}
+            {loading && (
+              <div className="hm-articles" aria-busy="true" aria-label="Loading history">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <article key={i} className="hm-article-card">
+                    <div className="hm-article-top">
+                      <Skeleton width={90} height={12} />
+                      <Skeleton width={60} height={12} />
+                    </div>
+                    <div style={{ marginTop: 10, marginBottom: 10 }}>
+                      <Skeleton height={20} width="80%" />
+                    </div>
+                    <div className="hm-article-footer">
+                      <Skeleton width={220} height={12} />
+                      <Skeleton width={70} height={28} radius={8} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
             {!loading && (reads?.data?.length ?? 0) === 0 && (
               <p className="hm-empty">You haven&apos;t read anything yet. <a href="/articles" className="su-link">Find something</a>.</p>
             )}

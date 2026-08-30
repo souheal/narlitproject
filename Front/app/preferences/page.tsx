@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState, useTransition } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface Preferences {
   email_digest: "off" | "daily" | "weekly" | "monthly";
@@ -73,9 +74,7 @@ export default function PreferencesPage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 

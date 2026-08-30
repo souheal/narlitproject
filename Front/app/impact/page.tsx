@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface OrgBreakdown {
   organization_public_id: string;
@@ -53,7 +55,26 @@ export default function ImpactPage() {
   const [user, setUser] = useState<User | null>(null);
   const [data, setData] = useState<ImpactSummary | null>(null);
   const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [meRes, impactRes] = await Promise.all([
+        apiFetch("/auth/me"),
+        apiFetch("/member/impact"),
+      ]);
+      const meData = await meRes.json();
+      const impactData = await impactRes.json();
+      setUser(meData.data?.user ?? meData.data ?? null);
+      if (impactRes.ok) setData(impactData.data?.impact ?? null);
+      else setError(impactData?.message ?? "Failed to load impact.");
+    } catch {
+      setError("Failed to load impact data.");
+    }
+    setLoading(false);
+  }
 
   useEffect(() => {
     validateSession().then(async (valid) => {
@@ -62,28 +83,14 @@ export default function ImpactPage() {
         window.location.href = "/login";
         return;
       }
-      try {
-        const [meRes, impactRes] = await Promise.all([
-          apiFetch("/auth/me"),
-          apiFetch("/member/impact"),
-        ]);
-        const meData = await meRes.json();
-        const impactData = await impactRes.json();
-        setUser(meData.data?.user ?? meData.data ?? null);
-        if (impactRes.ok) setData(impactData.data?.impact ?? null);
-        else setError(impactData?.message ?? "Failed to load impact.");
-      } catch {
-        setError("Failed to load impact data.");
-      }
       setChecking(false);
+      load();
     });
   }, []);
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -123,6 +130,24 @@ export default function ImpactPage() {
 
         <section className="hm-section">
           <h2 className="hm-section-title">Lifetime stats</h2>
+          {loading ? (
+            <div className="hm-stats-grid" aria-busy="true" aria-label="Loading stats">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="hm-stat-card">
+                  <Skeleton width={40} height={40} radius={12} />
+                  <div style={{ marginTop: 10 }}>
+                    <Skeleton width="55%" height={22} />
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <Skeleton width="70%" height={12} />
+                  </div>
+                  <div style={{ marginTop: 6 }}>
+                    <Skeleton width="50%" height={10} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="hm-stats-grid">
             <div className="hm-stat-card">
               <div className="hm-stat-icon hm-stat-icon-orange">$</div>
@@ -155,6 +180,7 @@ export default function ImpactPage() {
               <div className="hm-stat-hint">Longest: {totals?.longest_streak ?? 0} days</div>
             </div>
           </div>
+          )}
         </section>
 
         <div className="hm-content-grid">
@@ -185,9 +211,28 @@ export default function ImpactPage() {
             </div>
 
             <h2 className="hm-section-title" style={{ marginTop: 32 }}>Nonprofits you support</h2>
+            {loading && (
+              <div className="hm-articles" aria-busy="true" aria-label="Loading nonprofits">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <article key={i} className="hm-article-card">
+                    <div className="hm-article-top">
+                      <Skeleton width={140} height={12} />
+                      <Skeleton width={70} height={12} />
+                    </div>
+                    <div style={{ marginTop: 10, marginBottom: 10 }}>
+                      <Skeleton height={20} width="60%" />
+                    </div>
+                    <div className="hm-article-footer">
+                      <Skeleton width={180} height={12} />
+                      <Skeleton width={80} height={28} radius={8} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
             <div className="hm-articles">
-              {orgs.length === 0 && <p className="hm-empty">No nonprofits supported yet.</p>}
-              {orgs.map((o) => (
+              {!loading && orgs.length === 0 && <p className="hm-empty">No nonprofits supported yet.</p>}
+              {!loading && orgs.map((o) => (
                 <article key={o.organization_public_id} className="hm-article-card">
                   <div className="hm-article-top">
                     <span className="hm-article-org">{o.organization_name}</span>
@@ -213,9 +258,27 @@ export default function ImpactPage() {
             <section className="hm-panel">
               <h2 className="hm-panel-title">Recent contributions</h2>
               <p className="hm-panel-sub">Last 10 completed reads that funded a nonprofit</p>
+              {loading && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }} aria-busy="true" aria-label="Loading contributions">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} style={{ paddingBottom: 10, borderBottom: "1px solid var(--line)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                        <Skeleton width="55%" height={12} />
+                        <Skeleton width={50} height={12} />
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        <Skeleton width="80%" height={10} />
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        <Skeleton width={70} height={10} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
-                {transactions.length === 0 && <p className="hm-empty">No contributions yet.</p>}
-                {transactions.slice(0, 10).map((t) => (
+                {!loading && transactions.length === 0 && <p className="hm-empty">No contributions yet.</p>}
+                {!loading && transactions.slice(0, 10).map((t) => (
                   <div key={t.public_id} style={{ paddingBottom: 10, borderBottom: "1px solid var(--line)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem" }}>
                       <strong>{t.organization_name}</strong>

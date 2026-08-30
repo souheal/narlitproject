@@ -4,6 +4,9 @@ import { useEffect, useState, useTransition } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { safeHref } from "@/lib/safeUrl";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface Notification {
   public_id: string;
@@ -33,28 +36,30 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
   async function load() {
+    setLoading(true);
     try {
       const res = await apiFetch(`/member/notifications?filter=${filter}`);
       const data = await res.json();
       if (res.ok) setNotifications(data.data?.notifications?.data ?? data.data?.notifications ?? []);
       else setError(data?.message ?? "Failed to load notifications.");
     } catch { setError("Failed to load notifications."); }
+    setLoading(false);
   }
 
   useEffect(() => {
     validateSession().then(async (valid) => {
       if (!valid) { clearToken(); window.location.href = "/login"; return; }
-      try {
-        const meRes = await apiFetch("/auth/me");
-        const meData = await meRes.json();
-        setUser(meData.data?.user ?? meData.data ?? null);
-      } catch { /* ignore */ }
-      await load();
       setChecking(false);
+      apiFetch("/auth/me")
+        .then((r) => r.json())
+        .then((d) => setUser(d.data?.user ?? d.data ?? null))
+        .catch(() => {});
+      load();
     });
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [filter]);
@@ -80,9 +85,7 @@ export default function NotificationsPage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -111,7 +114,38 @@ export default function NotificationsPage() {
           </div>
 
           {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
-          {notifications.length === 0 && <p className="hm-empty">You&apos;re all caught up! 🎉</p>}
+
+          {loading && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }} aria-busy="true" aria-label="Loading notifications">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    padding: 16,
+                    border: "1px solid var(--line)",
+                    borderRadius: 12,
+                    background: "var(--panel)",
+                    display: "flex",
+                    gap: 14,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <Skeleton width={32} height={32} radius={16} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                      <Skeleton width="55%" height={14} />
+                      <Skeleton width={90} height={10} />
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <SkeletonText lines={2} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!loading && notifications.length === 0 && <p className="hm-empty">You&apos;re all caught up! 🎉</p>}
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {notifications.map((n) => (
@@ -153,7 +187,7 @@ export default function NotificationsPage() {
                   {n.body && <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>{n.body}</p>}
                   {n.action_url && (
                     <a
-                      href={n.action_url}
+                      href={safeHref(n.action_url)}
                       className="su-link"
                       style={{ fontSize: "0.8rem", marginTop: 8, display: "inline-block" }}
                       onClick={(e) => e.stopPropagation()}

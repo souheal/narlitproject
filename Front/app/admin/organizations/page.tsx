@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { getAdminToken, clearAdminToken } from "@/lib/auth";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
+import { adminFetch } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
 
 type Status = "pending" | "approved" | "rejected";
+
+const VALID_STATUSES: Status[] = ["pending", "approved", "rejected"];
 
 interface Org {
   public_id: string;
@@ -19,33 +20,41 @@ interface Org {
 }
 
 export default function AdminOrganizationsPage() {
+  const searchParams = useSearchParams();
+  const initialTab = useMemo<Status>(() => {
+    const raw = searchParams?.get("status");
+    return raw && (VALID_STATUSES as string[]).includes(raw) ? (raw as Status) : "pending";
+  }, [searchParams]);
+  const highlightId = searchParams?.get("open") ?? null;
+
   const [orgs, setOrgs]           = useState<Org[]>([]);
-  const [tab, setTab]             = useState<Status>("pending");
+  const [tab, setTab]             = useState<Status>(initialTab);
   const [loading, setLoading]     = useState(true);
   const [rejectId, setRejectId]   = useState<string | null>(null);
   const [reason, setReason]       = useState("");
   const [feedback, setFeedback]   = useState("");
   const [error, setError]         = useState("");
   const [isPending, startTransition] = useTransition();
+  const highlightRef = useRef<HTMLTableRowElement | null>(null);
 
-  function authHeaders() {
-    return {
-      Authorization: `Bearer ${getAdminToken()}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    };
-  }
+  useEffect(() => {
+    if (highlightId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightId, orgs]);
 
   async function fetchOrgs(status: Status) {
     setLoading(true);
     setError("");
     try {
-      const res  = await fetch(`${API_BASE_URL}/admin/organizations?status=${status}`, {
-        headers: authHeaders(),
-      });
-      if (res.status === 401) { clearAdminToken(); window.location.href = "/admin/login"; return; }
+      const res  = await adminFetch(`/admin/organizations?status=${status}`);
       const data = await res.json();
-      setOrgs(data.data?.organizations?.data ?? []);
+      if (!res.ok) {
+        setError(data?.message ?? "Failed to load organizations.");
+        setOrgs([]);
+      } else {
+        setOrgs(data.data?.organizations?.data ?? []);
+      }
     } catch {
       setError("Failed to load organizations.");
     } finally {
@@ -58,11 +67,11 @@ export default function AdminOrganizationsPage() {
   function handleApprove(publicId: string) {
     setFeedback(""); setError("");
     startTransition(async () => {
-      const res  = await fetch(`${API_BASE_URL}/admin/organizations/${publicId}/approve`, {
-        method: "POST", headers: authHeaders(),
+      const res  = await adminFetch(`/admin/organizations/${publicId}/approve`, {
+        method: "POST",
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.message ?? "Failed to approve."); return; }
+      if (!res.ok) { setError(data?.message ?? "Failed to approve."); return; }
       setFeedback("Organization approved successfully.");
       fetchOrgs(tab);
     });
@@ -72,13 +81,12 @@ export default function AdminOrganizationsPage() {
     if (!rejectId || !reason.trim()) return;
     setFeedback(""); setError("");
     startTransition(async () => {
-      const res  = await fetch(`${API_BASE_URL}/admin/organizations/${rejectId}/reject`, {
+      const res  = await adminFetch(`/admin/organizations/${rejectId}/reject`, {
         method: "POST",
-        headers: authHeaders(),
         body: JSON.stringify({ reason }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.message ?? "Failed to reject."); return; }
+      if (!res.ok) { setError(data?.message ?? "Failed to reject."); return; }
       setFeedback("Organization rejected.");
       setRejectId(null);
       setReason("");
@@ -107,7 +115,41 @@ export default function AdminOrganizationsPage() {
       {error    && <p className="narlit-feedback narlit-feedback-error"   style={{ marginBottom: 16 }}>{error}</p>}
 
       {loading ? (
-        <p style={{ color: "var(--muted)", fontWeight: 600 }}>Loading...</p>
+        <div className="admin-table-wrap" suppressHydrationWarning>
+          <table className="admin-table" aria-busy="true" aria-label="Loading organizations">
+            <thead>
+              <tr>
+                <th>Organization</th>
+                <th>Email</th>
+                <th>IRS</th>
+                <th>Status</th>
+                {tab === "pending" && <th>Actions</th>}
+                {tab === "rejected" && <th>Reason</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i}>
+                  <td><Skeleton width="70%" height={14} /></td>
+                  <td><Skeleton width="80%" height={14} /></td>
+                  <td><Skeleton width={70} height={20} radius={6} /></td>
+                  <td><Skeleton width={70} height={20} radius={6} /></td>
+                  {tab === "pending" && (
+                    <td>
+                      <div className="admin-actions">
+                        <Skeleton width={72} height={28} radius={8} />
+                        <Skeleton width={64} height={28} radius={8} />
+                      </div>
+                    </td>
+                  )}
+                  {tab === "rejected" && (
+                    <td><SkeletonText lines={2} widths={["80%", "50%"]} /></td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : orgs.length === 0 ? (
         <div className="admin-empty" suppressHydrationWarning>
           <p>No {tab} organizations.</p>
@@ -127,7 +169,11 @@ export default function AdminOrganizationsPage() {
             </thead>
             <tbody>
               {orgs.map((org) => (
-                <tr key={org.public_id}>
+                <tr
+                  key={org.public_id}
+                  ref={highlightId === org.public_id ? highlightRef : undefined}
+                  style={highlightId === org.public_id ? { background: "rgba(230,126,34,0.08)", outline: "2px solid rgba(230,126,34,0.5)" } : undefined}
+                >
                   <td style={{ fontWeight: 700 }}>{org.organization_name}</td>
                   <td style={{ color: "var(--muted)" }}>{org.email}</td>
                   <td>
@@ -172,7 +218,6 @@ export default function AdminOrganizationsPage() {
         </div>
       )}
 
-      {/* Reject Modal */}
       {rejectId && (
         <div className="admin-modal-overlay" suppressHydrationWarning onClick={() => setRejectId(null)}>
           <div className="admin-modal" suppressHydrationWarning onClick={(e) => e.stopPropagation()}>

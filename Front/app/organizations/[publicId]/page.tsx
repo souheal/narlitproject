@@ -4,6 +4,9 @@ import { use, useEffect, useState } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { safeHref, safeImageSrc, EXTERNAL_LINK_REL } from "@/lib/safeUrl";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface Article {
   public_id: string;
@@ -43,35 +46,109 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<OrgDetail | null>(null);
   const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [meRes, orgRes] = await Promise.all([
+        apiFetch("/auth/me"),
+        apiFetch(`/organizations/${publicId}`),
+      ]);
+      const meData = await meRes.json();
+      const orgData = await orgRes.json();
+      setUser(meData.data?.user ?? meData.data ?? null);
+      if (orgRes.ok) setOrg(orgData.data?.organization ?? null);
+      else setError(orgData?.message ?? "Organization not found.");
+    } catch { setError("Failed to load organization."); }
+    setLoading(false);
+  }
 
   useEffect(() => {
     validateSession().then(async (valid) => {
       if (!valid) { clearToken(); window.location.href = "/login"; return; }
-      try {
-        const [meRes, orgRes] = await Promise.all([
-          apiFetch("/auth/me"),
-          apiFetch(`/organizations/${publicId}`),
-        ]);
-        const meData = await meRes.json();
-        const orgData = await orgRes.json();
-        setUser(meData.data?.user ?? meData.data ?? null);
-        if (orgRes.ok) setOrg(orgData.data?.organization ?? null);
-        else setError(orgData?.message ?? "Organization not found.");
-      } catch { setError("Failed to load organization."); }
       setChecking(false);
+      load();
     });
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [publicId]);
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
   const initials = user?.full_name?.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase() ?? "NL";
+
+  if (loading) {
+    return (
+      <div className="hm-shell" suppressHydrationWarning>
+        <MemberNav initials={initials} name={user?.full_name} email={user?.email} />
+        <main className="hm-main" aria-busy="true" aria-label="Loading organization">
+          <div style={{ maxWidth: 960, margin: "0 auto" }}>
+            <section className="hm-welcome" style={{ marginTop: 12 }}>
+              <div className="hm-welcome-inner" style={{ alignItems: "flex-start" }}>
+                <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flex: 1 }}>
+                  <Skeleton width={80} height={80} radius={16} />
+                  <div style={{ flex: 1 }}>
+                    <Skeleton width="60%" height={28} />
+                    <div style={{ marginTop: 10 }}>
+                      <SkeletonText lines={2} />
+                    </div>
+                    <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+                      <Skeleton width={80} height={12} />
+                      <Skeleton width={120} height={12} />
+                      <Skeleton width={100} height={12} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section className="hm-section">
+              <div className="hm-stats-grid">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="hm-stat-card">
+                    <Skeleton width={40} height={40} radius={12} />
+                    <div style={{ marginTop: 10 }}>
+                      <Skeleton width="55%" height={22} />
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <Skeleton width="70%" height={12} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <section className="hm-section">
+              <Skeleton width={160} height={20} />
+              <div className="hm-articles" style={{ marginTop: 16 }}>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <article key={i} className="hm-article-card">
+                    <div className="hm-article-top">
+                      <Skeleton width={90} height={12} />
+                      <Skeleton width={70} height={12} />
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <Skeleton height={22} width="85%" />
+                    </div>
+                    <div style={{ marginTop: 10, marginBottom: 12 }}>
+                      <SkeletonText lines={2} />
+                    </div>
+                    <div className="hm-article-footer">
+                      <Skeleton width={90} height={12} />
+                      <Skeleton width={90} height={32} radius={8} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (error || !org) {
     return (
@@ -108,7 +185,7 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
             <div className="hm-welcome-inner" style={{ alignItems: "flex-start" }}>
               <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
                 {org.logo_url ? (
-                  <img src={org.logo_url} alt="" style={{ width: 80, height: 80, borderRadius: 16, objectFit: "cover" }} />
+                  <img src={safeImageSrc(org.logo_url)} alt="" style={{ width: 80, height: 80, borderRadius: 16, objectFit: "cover" }} />
                 ) : (
                   <div style={{
                     width: 80, height: 80, borderRadius: 16,
@@ -128,7 +205,7 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
                     {org.category && <span>🏷️ {org.category}</span>}
                     {(org.city || org.country) && <span>📍 {[org.city, org.country].filter(Boolean).join(", ")}</span>}
                     {org.founded_year && <span>📅 Founded {org.founded_year}</span>}
-                    {org.website && <a href={org.website} target="_blank" rel="noreferrer" className="su-link">🌐 Website</a>}
+                    {org.website && <a href={safeHref(org.website)} target="_blank" rel={EXTERNAL_LINK_REL} className="su-link">🌐 Website</a>}
                   </div>
                 </div>
               </div>

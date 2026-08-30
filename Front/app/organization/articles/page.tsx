@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface OrgArticle {
   public_id: string;
@@ -37,7 +39,7 @@ export default function OrgArticlesPage() {
   const [meta, setMeta] = useState<Pagination | null>(null);
   const [page, setPage] = useState(1);
   const [checking, setChecking] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   async function loadArticles(target: number) {
@@ -65,14 +67,14 @@ export default function OrgArticlesPage() {
   }
 
   useEffect(() => {
-    validateSession().then(async (valid) => {
+    validateSession().then((valid) => {
       if (!valid) {
         clearToken();
         window.location.href = "/login";
         return;
       }
-      await loadArticles(1);
       setChecking(false);
+      loadArticles(1);
     });
   }, []);
 
@@ -85,11 +87,7 @@ export default function OrgArticlesPage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" />
-        <span className="hm-loading-dot" />
-        <span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -124,7 +122,28 @@ export default function OrgArticlesPage() {
 
           {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
 
-          {loading && articles.length === 0 && <p className="hm-empty">Loading…</p>}
+          {loading && articles.length === 0 && (
+            <div className="hm-articles" aria-busy="true" aria-label="Loading articles">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <article key={i} className="hm-article-card">
+                  <div className="hm-article-top">
+                    <Skeleton width={90} height={12} />
+                    <Skeleton width={70} height={12} />
+                  </div>
+                  <div style={{ marginTop: 10 }}>
+                    <Skeleton height={22} width="85%" />
+                  </div>
+                  <div style={{ marginTop: 10, marginBottom: 12 }}>
+                    <SkeletonText lines={2} />
+                  </div>
+                  <div className="hm-article-footer">
+                    <Skeleton width={140} height={12} />
+                    <Skeleton width={90} height={32} radius={8} />
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
           {!loading && articles.length === 0 && !error && (
             <p className="hm-empty">
               You haven&apos;t submitted any articles yet.{" "}

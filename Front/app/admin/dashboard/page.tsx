@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { adminFetch } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
 
 interface Overview {
   users: { total: number; active: number; new_this_month: number; new_last_month: number };
@@ -153,9 +154,84 @@ export default function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div suppressHydrationWarning>
-        <h2 className="admin-page-title">Dashboard</h2>
-        <p className="admin-empty">Loading overview…</p>
+      <div suppressHydrationWarning aria-busy="true" aria-label="Loading dashboard">
+        <div className="admin-page-header">
+          <h2 className="admin-page-title">Platform Overview</h2>
+          <Skeleton width={50} height={22} radius={12} />
+        </div>
+
+        <div className="admin-stats-grid" style={{ marginBottom: 20 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="admin-stat-card" style={{ cursor: "default" }}>
+              <Skeleton width={130} height={12} />
+              <div style={{ marginTop: 10 }}>
+                <Skeleton width="60%" height={30} />
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <Skeleton width="80%" height={12} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="admin-stats-grid" style={{ marginBottom: 20 }}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="admin-stat-card" style={{ cursor: "default", gridColumn: i === 2 ? "span 2" : undefined }}>
+              <Skeleton width={120} height={12} />
+              <div style={{ marginTop: 10 }}>
+                <Skeleton width="50%" height={26} />
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <Skeleton height={i === 2 ? 120 : 32} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="admin-dash-two-col">
+          <section className="admin-panel">
+            <header className="admin-panel-header">
+              <div>
+                <Skeleton width={140} height={16} />
+                <div style={{ marginTop: 6 }}><Skeleton width={200} height={12} /></div>
+              </div>
+              <Skeleton width={40} height={26} radius={10} />
+            </header>
+            <ul className="admin-queue-list">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <li key={i} className="admin-queue-row">
+                  <Skeleton width={32} height={32} radius={8} />
+                  <div className="admin-queue-info" style={{ flex: 1 }}>
+                    <SkeletonText lines={2} widths={["55%", "75%"]} />
+                  </div>
+                  <Skeleton width={40} height={20} radius={6} />
+                  <Skeleton width={80} height={28} radius={8} />
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="admin-panel">
+            <header className="admin-panel-header">
+              <div>
+                <Skeleton width={140} height={16} />
+                <div style={{ marginTop: 6 }}><Skeleton width={200} height={12} /></div>
+              </div>
+              <Skeleton width={40} height={26} radius={10} />
+            </header>
+            <ul className="admin-activity-list">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <li key={i} className="admin-activity-item">
+                  <Skeleton width={28} height={28} radius="50%" />
+                  <div className="admin-activity-body" style={{ flex: 1 }}>
+                    <SkeletonText lines={2} widths={["70%", "40%"]} />
+                  </div>
+                  <Skeleton width={50} height={12} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
       </div>
     );
   }

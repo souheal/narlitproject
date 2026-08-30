@@ -41,9 +41,11 @@ export function middleware(request: NextRequest) {
   const adminToken = request.cookies.get("admin_token")?.value;
 
   // Admin routes — require admin_token
-  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
+  if (pathname.startsWith("/admin")) {
     if (!adminToken) {
-      return NextResponse.redirect(new URL("/admin/login", request.url));
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("next", pathname);
+      return NextResponse.redirect(loginUrl);
     }
     return NextResponse.next();
   }

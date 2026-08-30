@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { adminFetch } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
 
 type Range = "7d" | "30d" | "90d" | "12m";
 
@@ -187,7 +188,56 @@ export default function AdminAnalyticsPage() {
         </div>
       </div>
 
-      {loading && <p className="admin-empty">Loading analytics…</p>}
+      {loading && (
+        <div aria-busy="true" aria-label="Loading analytics">
+          <div className="admin-stats-grid" style={{ marginBottom: 20 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="admin-stat-card" style={{ cursor: "default" }}>
+                <Skeleton width={130} height={12} />
+                <div style={{ marginTop: 10 }}><Skeleton width="50%" height={26} /></div>
+                <div style={{ marginTop: 8 }}><Skeleton width="80%" height={12} /></div>
+              </div>
+            ))}
+          </div>
+          <div className="admin-dash-two-col" style={{ marginBottom: 20 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <section key={i} className="admin-panel">
+                <header className="admin-panel-header">
+                  <div>
+                    <Skeleton width={160} height={16} />
+                    <div style={{ marginTop: 6 }}><Skeleton width={200} height={12} /></div>
+                  </div>
+                  <Skeleton width={60} height={26} radius={8} />
+                </header>
+                <Skeleton height={160} radius={8} />
+              </section>
+            ))}
+          </div>
+          <div className="admin-dash-two-col" style={{ marginBottom: 20 }}>
+            {Array.from({ length: 2 }).map((_, panelIdx) => (
+              <section key={panelIdx} className="admin-panel">
+                <header className="admin-panel-header">
+                  <div>
+                    <Skeleton width={160} height={16} />
+                    <div style={{ marginTop: 6 }}><Skeleton width={200} height={12} /></div>
+                  </div>
+                  <Skeleton width={40} height={26} radius={8} />
+                </header>
+                <ul className="admin-rank-list">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <li key={i} className="admin-rank-row">
+                      <Skeleton width={32} height={32} radius="50%" />
+                      <div className="admin-rank-info" style={{ flex: 1 }}>
+                        <SkeletonText lines={2} widths={["70%", "40%"]} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        </div>
+      )}
       {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
 
       {data && (

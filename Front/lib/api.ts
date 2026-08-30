@@ -51,7 +51,7 @@ export async function validateSession(): Promise<boolean> {
 function redirectToAdminLogin() {
   clearAdminToken();
   if (typeof window !== "undefined") {
-    window.location.href = "/admin/login";
+    window.location.href = "/login";
   }
 }
 

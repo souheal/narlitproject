@@ -4,6 +4,8 @@ import { useEffect, useState, useTransition } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface Bookmark {
   public_id: string;
@@ -25,28 +27,30 @@ export default function BookmarksPage() {
   const [user, setUser] = useState<User | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
   async function load() {
+    setLoading(true);
     try {
       const res = await apiFetch("/member/bookmarks");
       const data = await res.json();
       if (res.ok) setBookmarks(data.data?.bookmarks?.data ?? data.data?.bookmarks ?? []);
       else setError(data?.message ?? "Failed to load bookmarks.");
     } catch { setError("Failed to load bookmarks."); }
+    setLoading(false);
   }
 
   useEffect(() => {
     validateSession().then(async (valid) => {
       if (!valid) { clearToken(); window.location.href = "/login"; return; }
-      try {
-        const meRes = await apiFetch("/auth/me");
-        const meData = await meRes.json();
-        setUser(meData.data?.user ?? meData.data ?? null);
-      } catch { /* ignore */ }
-      await load();
       setChecking(false);
+      apiFetch("/auth/me")
+        .then((r) => r.json())
+        .then((d) => setUser(d.data?.user ?? d.data ?? null))
+        .catch(() => {});
+      load();
     });
   }, []);
 
@@ -61,9 +65,7 @@ export default function BookmarksPage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -81,14 +83,36 @@ export default function BookmarksPage() {
 
           {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
 
-          {bookmarks.length === 0 && (
+          {loading && (
+            <div className="hm-articles" aria-busy="true" aria-label="Loading bookmarks">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <article key={i} className="hm-article-card">
+                  <div className="hm-article-top">
+                    <Skeleton width={90} height={12} />
+                    <Skeleton width={70} height={12} />
+                  </div>
+                  <div style={{ marginTop: 10 }}><Skeleton height={22} width="80%" /></div>
+                  <div style={{ marginTop: 8, marginBottom: 12 }}><SkeletonText lines={2} /></div>
+                  <div className="hm-article-footer">
+                    <Skeleton width={140} height={12} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Skeleton width={70} height={28} radius={8} />
+                      <Skeleton width={90} height={28} radius={8} />
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {!loading && bookmarks.length === 0 && (
             <p className="hm-empty">
               You haven&apos;t saved anything yet. Tap the bookmark icon on any article to save it for later.
             </p>
           )}
 
           <div className="hm-articles">
-            {bookmarks.map((b) => (
+            {!loading && bookmarks.map((b) => (
               <article key={b.public_id} className={`hm-article-card${b.article.is_read ? " hm-article-read" : ""}`}>
                 <div className="hm-article-top">
                   <span className="hm-article-org">{b.article.organization.name ?? "NarLit"}</span>

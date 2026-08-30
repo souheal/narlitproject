@@ -1,9 +1,16 @@
 "use client";
 
-import { FormEvent, useState, useTransition } from "react";
+import { FormEvent, useEffect, useState, useTransition } from "react";
 
-type Plan = "monthly" | "yearly";
 type Step = "register" | "verify" | "payment" | "complete";
+
+interface PublicPlan {
+  key: string;
+  name: string;
+  billing_interval: string;
+  display_price: string;
+  stripe_price_id: string | null;
+}
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1";
@@ -15,12 +22,27 @@ const initialForm = {
   phone: "",
   password: "",
   password_confirmation: "",
-  subscription_plan: "monthly" as Plan,
+  subscription_plan: "monthly",
 };
+
+function intervalLabel(interval: string): string {
+  const i = interval.toLowerCase();
+  if (i.includes("year")) return "yr";
+  if (i.includes("month")) return "mo";
+  if (i.includes("week")) return "wk";
+  if (i.includes("day")) return "day";
+  return interval;
+}
+
+function formatPlanPrice(plan: PublicPlan): string {
+  return `$${plan.display_price} / ${intervalLabel(plan.billing_interval)}`;
+}
 
 export default function SignupPage() {
   const [step, setStep] = useState<Step>("register");
   const [form, setForm] = useState(initialForm);
+  const [plans, setPlans] = useState<PublicPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
   const [otp, setOtp] = useState("");
   const [otpExpiresAt, setOtpExpiresAt] = useState("");
   const [emailVerifiedAt, setEmailVerifiedAt] = useState("");
@@ -28,6 +50,31 @@ export default function SignupPage() {
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/subscription/plans`, {
+          headers: { Accept: "application/json" },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const list: PublicPlan[] = data.data?.plans ?? [];
+          setPlans(list);
+          if (list.length > 0 && !list.some((p) => p.key === form.subscription_plan)) {
+            setForm((f) => ({ ...f, subscription_plan: list[0].key }));
+          }
+        }
+      } catch {
+        /* fall back to any keys chosen */
+      } finally {
+        setPlansLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selectedPlan = plans.find((p) => p.key === form.subscription_plan);
 
   function field(key: keyof typeof initialForm) {
     return (value: string) => setForm((f) => ({ ...f, [key]: value }));
@@ -182,19 +229,22 @@ export default function SignupPage() {
             </div>
 
             <div className="su-plans" suppressHydrationWarning>
-              <PlanOption
-                title="Monthly"
-                price="$7 / mo"
-                active={form.subscription_plan === "monthly"}
-                onClick={() => field("subscription_plan")("monthly")}
-              />
-              <PlanOption
-                title="Yearly"
-                price="$96 / yr"
-                note="Save 20%"
-                active={form.subscription_plan === "yearly"}
-                onClick={() => field("subscription_plan")("yearly")}
-              />
+              {plansLoading ? (
+                <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Loading plans…</p>
+              ) : plans.length === 0 ? (
+                <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>No subscription plans are currently available.</p>
+              ) : (
+                plans.map((plan) => (
+                  <PlanOption
+                    key={plan.key}
+                    title={plan.name}
+                    price={formatPlanPrice(plan)}
+                    note={plan.billing_interval.toLowerCase().includes("year") ? "Best value" : undefined}
+                    active={form.subscription_plan === plan.key}
+                    onClick={() => field("subscription_plan")(plan.key)}
+                  />
+                ))
+              )}
             </div>
 
             <button className="narlit-button narlit-button-primary" disabled={isPending}>
@@ -246,7 +296,7 @@ export default function SignupPage() {
             <div className="su-info-box">
               <Row label="Email" value={form.email} />
               <Row label="Verified at" value={formatDate(emailVerifiedAt)} />
-              <Row label="Plan" value={form.subscription_plan === "monthly" ? "Monthly — $7" : "Yearly — $96"} />
+              <Row label="Plan" value={selectedPlan ? `${selectedPlan.name} — $${selectedPlan.display_price}` : form.subscription_plan} />
             </div>
 
             <button

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { adminFetch } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
 
 interface AuditEntry {
   id: number;
@@ -19,6 +20,14 @@ interface AuditEntry {
   metadata: Record<string, unknown> | null;
   target_admin_path: string | null;
   created_at: string;
+}
+
+function rewriteTargetPath(path: string | null): string | null {
+  if (!path) return null;
+  const match = path.match(/^\/admin\/(users|articles|organizations|subscriptions|payouts)\/([^/?#]+)$/);
+  if (!match) return path;
+  const [, section, id] = match;
+  return `/admin/${section}?open=${encodeURIComponent(id)}`;
 }
 
 const ACTION_COLORS: Record<string, string> = {
@@ -188,7 +197,37 @@ export default function AdminAuditPage() {
       {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
 
       <div className="admin-table-wrap">
-        {loading && <p className="admin-empty">Loading…</p>}
+        {loading && (
+          <table className="admin-table" aria-busy="true" aria-label="Loading audit log">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Actor</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>IP</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <tr key={i}>
+                  <td><Skeleton width={120} height={12} /></td>
+                  <td><SkeletonText lines={2} widths={["70%", "80%"]} /></td>
+                  <td><Skeleton width={60} height={20} radius={6} /></td>
+                  <td><SkeletonText lines={2} widths={["70%", "40%"]} /></td>
+                  <td><Skeleton width={90} height={12} /></td>
+                  <td>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <Skeleton width={70} height={28} radius={8} />
+                      <Skeleton width={50} height={28} radius={8} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
         {!loading && entries.length === 0 && <p className="admin-empty">No events.</p>}
         {!loading && entries.length > 0 && (
           <table className="admin-table">
@@ -297,7 +336,16 @@ export default function AdminAuditPage() {
               {new Date(details.created_at).toLocaleString()}
             </p>
 
-            {loadingDetails && <p className="admin-empty">Loading details…</p>}
+            {loadingDetails && (
+              <div aria-busy="true" aria-label="Loading audit details" style={{ marginTop: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <Skeleton key={i} width="80%" height={14} />
+                  ))}
+                </div>
+                <Skeleton height={120} radius={8} />
+              </div>
+            )}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "16px 0" }}>
               <div><strong>Action:</strong> {details.action}</div>
@@ -326,9 +374,10 @@ export default function AdminAuditPage() {
             )}
 
             <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-              {details.target_admin_path && (
-                <a className="admin-btn" href={details.target_admin_path}>Open target</a>
-              )}
+              {(() => {
+                const target = rewriteTargetPath(details.target_admin_path);
+                return target ? <a className="admin-btn" href={target}>Open target</a> : null;
+              })()}
               <button className="admin-btn" onClick={() => setDetails(null)}>Close</button>
             </div>
           </div>

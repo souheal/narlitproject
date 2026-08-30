@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useState } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface ArticleResult {
   public_id: string;
@@ -81,9 +83,7 @@ export default function SearchPage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -119,7 +119,55 @@ export default function SearchPage() {
           </form>
 
           {error && <p className="narlit-feedback narlit-feedback-error" style={{ marginTop: 16 }}>{error}</p>}
-          {searching && <p className="hm-empty" style={{ marginTop: 20 }}>Searching…</p>}
+          {searching && (
+            <div style={{ marginTop: 20 }} aria-busy="true" aria-label="Searching">
+              <div style={{ marginBottom: 12 }}>
+                <Skeleton width={180} height={14} />
+              </div>
+              <div style={{ marginBottom: 20 }}>
+                <Skeleton width={280} height={32} radius={12} />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <Skeleton width={120} height={12} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12, marginBottom: 24 }}>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="hm-panel" style={{ padding: 16, display: "flex", gap: 12 }}>
+                    <Skeleton width={40} height={40} radius={8} />
+                    <div style={{ flex: 1 }}>
+                      <Skeleton width="70%" height={14} />
+                      <div style={{ marginTop: 6 }}>
+                        <Skeleton width="40%" height={10} />
+                      </div>
+                      <div style={{ marginTop: 8 }}>
+                        <SkeletonText lines={2} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="hm-articles">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <article key={i} className="hm-article-card">
+                    <div className="hm-article-top">
+                      <Skeleton width={90} height={12} />
+                      <Skeleton width={70} height={12} />
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <Skeleton width="85%" height={20} />
+                    </div>
+                    <div style={{ marginTop: 8, marginBottom: 12 }}>
+                      <SkeletonText lines={2} />
+                    </div>
+                    <div className="hm-article-footer">
+                      <Skeleton width={80} height={12} />
+                      <Skeleton width={70} height={28} radius={8} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
 
           {results && !searching && (
             <>

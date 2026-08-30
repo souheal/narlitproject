@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { adminFetch } from "@/lib/api";
+import { ConfirmDialog } from "@/app/admin/_components/ConfirmDialog";
+import { PromptDialog } from "@/app/admin/_components/PromptDialog";
+import { safeHref, EXTERNAL_LINK_REL } from "@/lib/safeUrl";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
 
-type Status = "active" | "canceled" | "past_due" | "trialing" | "all";
+type Status = "active" | "canceled" | "past_due" | "unpaid" | "incomplete" | "all";
+
+const VALID_STATUSES: Status[] = ["active", "canceled", "past_due", "unpaid", "incomplete", "all"];
 
 interface Subscription {
   public_id: string;
@@ -74,10 +81,18 @@ function planIcon(plan: string): string {
 }
 
 export default function AdminSubscriptionsPage() {
+  const searchParams = useSearchParams();
+  const initialTab = useMemo<Status>(() => {
+    const raw = searchParams?.get("status");
+    return raw && (VALID_STATUSES as string[]).includes(raw) ? (raw as Status) : "active";
+  }, [searchParams]);
+  const openId = searchParams?.get("open") ?? null;
+  const autoOpenedRef = useRef<string | null>(null);
+
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
-  const [tab, setTab] = useState<Status>("active");
+  const [tab, setTab] = useState<Status>(initialTab);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -87,6 +102,10 @@ export default function AdminSubscriptionsPage() {
   const [summary, setSummary] = useState<PeriodSummary | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryDays, setSummaryDays] = useState<30 | 90 | 365>(90);
+
+  const [cancelTarget, setCancelTarget] = useState<Subscription | null>(null);
+  const [refundLatestTarget, setRefundLatestTarget] = useState<Subscription | null>(null);
+  const [refundPaymentTarget, setRefundPaymentTarget] = useState<string | null>(null);
 
   async function fetchMetrics() {
     try {
@@ -125,27 +144,49 @@ export default function AdminSubscriptionsPage() {
   useEffect(() => { fetchMetrics(); }, []);
   useEffect(() => { fetchSubs(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tab]);
 
-  function cancelSub(s: Subscription) {
-    if (!confirm(`Cancel ${s.subscriber.email ?? "this user"}'s ${s.plan} subscription?`)) return;
+  useEffect(() => {
+    if (!openId || autoOpenedRef.current === openId) return;
+    autoOpenedRef.current = openId;
+    (async () => {
+      try {
+        const res = await adminFetch(`/admin/subscriptions/${openId}`);
+        const data = await res.json();
+        if (!res.ok) { setError(data?.message ?? "Failed to load subscription."); return; }
+        const payload = data.data?.subscription;
+        if (!payload) return;
+        setDetail(payload);
+      } catch {
+        setError("Failed to load subscription.");
+      }
+    })();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [openId]);
+
+  function confirmCancelSub() {
+    if (!cancelTarget) return;
+    const s = cancelTarget;
     setFeedback(""); setError("");
     startTransition(async () => {
       const res = await adminFetch(`/admin/subscriptions/${s.public_id}/cancel`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) { setError(data?.message ?? "Failed to cancel."); return; }
       setFeedback("Subscription canceled.");
+      setCancelTarget(null);
       fetchSubs(meta.current_page);
       fetchMetrics();
     });
   }
 
-  function refund(s: Subscription) {
-    if (!confirm(`Issue full refund for ${s.subscriber.email ?? "this user"}?`)) return;
+  function confirmRefundLatest() {
+    if (!refundLatestTarget) return;
+    const s = refundLatestTarget;
     setFeedback(""); setError("");
     startTransition(async () => {
       const res = await adminFetch(`/admin/subscriptions/${s.public_id}/refund`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) { setError(data?.message ?? "Failed to refund."); return; }
       setFeedback("Refund issued via Stripe.");
+      setRefundLatestTarget(null);
     });
   }
 
@@ -163,14 +204,19 @@ export default function AdminSubscriptionsPage() {
     setLoadingDetail(false);
   }
 
-  function refundPayment(paymentPublicId: string) {
-    if (!confirm("Refund this specific payment via Stripe?")) return;
+  function submitRefundPayment(reason: string) {
+    if (!refundPaymentTarget) return;
+    const paymentPublicId = refundPaymentTarget;
     setFeedback(""); setError("");
     startTransition(async () => {
-      const res = await adminFetch(`/admin/payments/${paymentPublicId}/refund`, { method: "POST" });
+      const res = await adminFetch(`/admin/payments/${paymentPublicId}/refund`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
       const data = await res.json();
       if (!res.ok) { setError(data?.message ?? "Failed to refund payment."); return; }
       setFeedback("Payment refunded.");
+      setRefundPaymentTarget(null);
       if (detail) openDetail(detail.subscription);
     });
   }
@@ -246,6 +292,17 @@ export default function AdminSubscriptionsPage() {
       )}
 
       {/* Metrics */}
+      {!metrics && (
+        <div className="admin-stats-grid" style={{ marginBottom: 16 }} aria-busy="true" aria-label="Loading subscription metrics">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="admin-stat-card" style={{ cursor: "default" }}>
+              <Skeleton width={130} height={12} />
+              <div style={{ marginTop: 10 }}><Skeleton width="60%" height={28} /></div>
+              <div style={{ marginTop: 8 }}><Skeleton width="80%" height={12} /></div>
+            </div>
+          ))}
+        </div>
+      )}
       {metrics && (
         <>
           <div className="admin-stats-grid" style={{ marginBottom: 16 }}>
@@ -382,7 +439,7 @@ export default function AdminSubscriptionsPage() {
 
       {/* Subscriptions list */}
       <div className="admin-tabs">
-        {(["active", "trialing", "past_due", "canceled", "all"] as Status[]).map((s) => (
+        {(["active", "past_due", "unpaid", "incomplete", "canceled", "all"] as Status[]).map((s) => (
           <button key={s} className={`admin-tab ${tab === s ? "admin-tab-active" : ""}`} onClick={() => setTab(s)}>
             {s.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}
           </button>
@@ -393,7 +450,39 @@ export default function AdminSubscriptionsPage() {
       {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
 
       <div className="admin-table-wrap">
-        {loading && <p className="admin-empty">Loading…</p>}
+        {loading && (
+          <table className="admin-table" aria-busy="true" aria-label="Loading subscriptions">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Plan</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Started</th>
+                <th>Expires</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <tr key={i}>
+                  <td><SkeletonText lines={2} widths={["70%", "50%"]} /></td>
+                  <td><Skeleton width={70} height={14} /></td>
+                  <td><Skeleton width={60} height={14} /></td>
+                  <td><Skeleton width={70} height={20} radius={6} /></td>
+                  <td><Skeleton width={80} height={14} /></td>
+                  <td><Skeleton width={80} height={14} /></td>
+                  <td>
+                    <div className="admin-actions">
+                      <Skeleton width={56} height={28} radius={8} />
+                      <Skeleton width={80} height={28} radius={8} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
         {!loading && subs.length === 0 && <p className="admin-empty">No subscriptions.</p>}
         {!loading && subs.length > 0 && (
           <table className="admin-table">
@@ -428,11 +517,11 @@ export default function AdminSubscriptionsPage() {
                     <div className="admin-actions">
                       <button className="admin-btn" onClick={() => openDetail(s)}>View</button>
                       {s.status === "active" && (
-                        <button className="admin-btn admin-btn-reject" onClick={() => cancelSub(s)} disabled={isPending}>
+                        <button className="admin-btn admin-btn-reject" onClick={() => setCancelTarget(s)} disabled={isPending}>
                           Cancel
                         </button>
                       )}
-                      <button className="admin-btn" onClick={() => refund(s)} disabled={isPending}>
+                      <button className="admin-btn" onClick={() => setRefundLatestTarget(s)} disabled={isPending}>
                         Refund latest
                       </button>
                     </div>
@@ -469,7 +558,30 @@ export default function AdminSubscriptionsPage() {
             </p>
 
             <h4 style={{ marginTop: 20, marginBottom: 8 }}>Payments</h4>
-            {loadingDetail && <p className="admin-empty">Loading…</p>}
+            {loadingDetail && (
+              <table className="admin-table" aria-busy="true" aria-label="Loading payments">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Net</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <tr key={i}>
+                      <td><Skeleton width={80} height={12} /></td>
+                      <td><Skeleton width={60} height={14} /></td>
+                      <td><Skeleton width={50} height={14} /></td>
+                      <td><Skeleton width={70} height={20} radius={6} /></td>
+                      <td><Skeleton width={70} height={28} radius={8} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
             {!loadingDetail && detail.payments.length === 0 && <p className="admin-empty">No payments recorded.</p>}
             {!loadingDetail && detail.payments.length > 0 && (
               <table className="admin-table">
@@ -499,12 +611,12 @@ export default function AdminSubscriptionsPage() {
                       </td>
                       <td>
                         {!p.refunded_at && p.status === "succeeded" && (
-                          <button className="admin-btn admin-btn-reject" onClick={() => refundPayment(p.public_id)} disabled={isPending}>
+                          <button className="admin-btn admin-btn-reject" onClick={() => setRefundPaymentTarget(p.public_id)} disabled={isPending}>
                             Refund
                           </button>
                         )}
                         {p.stripe_links?.payment && (
-                          <a className="admin-btn" style={{ marginLeft: 4 }} href={p.stripe_links.payment} target="_blank" rel="noreferrer">
+                          <a className="admin-btn" style={{ marginLeft: 4 }} href={safeHref(p.stripe_links.payment)} target="_blank" rel={EXTERNAL_LINK_REL}>
                             Stripe ↗
                           </a>
                         )}
@@ -534,6 +646,63 @@ export default function AdminSubscriptionsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={cancelTarget !== null}
+        title="Cancel subscription?"
+        variant="danger"
+        confirmLabel="Cancel subscription"
+        cancelLabel="Keep active"
+        loading={isPending}
+        message={
+          cancelTarget ? (
+            <>
+              Cancel <strong>{cancelTarget.subscriber.name ?? cancelTarget.subscriber.email ?? "this user"}</strong>&apos;s{" "}
+              <strong>{cancelTarget.plan}</strong> subscription? The user will lose paid access at the end of the current period.
+            </>
+          ) : null
+        }
+        onConfirm={confirmCancelSub}
+        onCancel={() => setCancelTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={refundLatestTarget !== null}
+        title="Issue full refund?"
+        variant="danger"
+        confirmLabel="Refund via Stripe"
+        loading={isPending}
+        message={
+          refundLatestTarget ? (
+            <>
+              Refund the most recent payment of{" "}
+              <strong>${refundLatestTarget.amount} {refundLatestTarget.currency}</strong>{" "}
+              for <strong>{refundLatestTarget.subscriber.name ?? refundLatestTarget.subscriber.email ?? "this user"}</strong>?
+              This action is processed through Stripe and cannot be reverted from here.
+            </>
+          ) : null
+        }
+        onConfirm={confirmRefundLatest}
+        onCancel={() => setRefundLatestTarget(null)}
+      />
+
+      <PromptDialog
+        open={refundPaymentTarget !== null}
+        title="Refund payment"
+        description={<>Provide a reason so the refund is properly documented in the audit log and payment history.</>}
+        label="Reason"
+        hint="At least 10 characters"
+        placeholder="e.g. Duplicate charge, service outage, customer complaint…"
+        defaultValue="Full refund issued by admin."
+        multiline
+        minLength={10}
+        maxLength={500}
+        confirmLabel="Refund payment"
+        variant="danger"
+        loading={isPending}
+        onSubmit={submitRefundPayment}
+        onCancel={() => setRefundPaymentTarget(null)}
+      />
     </div>
   );
 }

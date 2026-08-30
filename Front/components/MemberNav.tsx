@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { clearToken } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { BellIcon, CheckIcon, CloseIcon, MenuIcon, SearchIcon } from "@/components/icons";
+import { safeHref } from "@/lib/safeUrl";
 
 interface Props {
   initials?: string;
@@ -401,7 +402,7 @@ export default function MemberNav({ initials, name, email }: Props) {
                     {!loadingNotifs && notifs.map((n) => (
                       <a
                         key={n.public_id}
-                        href={n.action_url ?? "/notifications"}
+                        href={safeHref(n.action_url, "/notifications")}
                         onClick={() => markOneRead(n)}
                         className={`hm-notif-item${!n.read_at ? " hm-notif-item-unread" : ""}`}
                       >

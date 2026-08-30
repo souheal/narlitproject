@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
 
 interface User {
   full_name: string;
@@ -65,14 +66,18 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   async function loadDashboard() {
+    setLoading(true);
     try {
       const res = await apiFetch("/member/dashboard");
       const data = await res.json();
       setDashboard(data.data?.dashboard ?? null);
     } catch {
       /* ignore — page falls back to empty state */
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -83,19 +88,12 @@ export default function DashboardPage() {
         window.location.href = "/login";
         return;
       }
-      await Promise.all([
-        (async () => {
-          try {
-            const res = await apiFetch("/auth/me");
-            const data = await res.json();
-            setUser(data.data?.user ?? data.data ?? null);
-          } catch {
-            /* ignore — name just won't show */
-          }
-        })(),
-        loadDashboard(),
-      ]);
       setChecking(false);
+      apiFetch("/auth/me")
+        .then((r) => r.json())
+        .then((d) => setUser(d.data?.user ?? d.data ?? null))
+        .catch(() => {});
+      loadDashboard();
     });
   }, []);
 
@@ -115,10 +113,40 @@ export default function DashboardPage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" />
-        <span className="hm-loading-dot" />
-        <span className="hm-loading-dot" />
+      <div className="hm-shell" suppressHydrationWarning>
+        <MemberNav initials="…" />
+        <main className="hm-main" aria-busy="true" aria-label="Loading dashboard">
+          <section className="hm-welcome">
+            <div className="hm-welcome-inner">
+              <div style={{ flex: 1 }}>
+                <Skeleton width={110} height={12} />
+                <div style={{ marginTop: 10 }}>
+                  <Skeleton width="65%" height={28} />
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <Skeleton width="85%" height={14} />
+                </div>
+              </div>
+              <Skeleton width={120} height={32} radius={999} />
+            </div>
+          </section>
+          <section className="hm-section">
+            <Skeleton width={140} height={20} />
+            <div className="hm-stats-grid" style={{ marginTop: 16 }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="hm-stat-card">
+                  <Skeleton width={40} height={40} radius={12} />
+                  <div style={{ marginTop: 10 }}>
+                    <Skeleton width="55%" height={22} />
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <Skeleton width="70%" height={12} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </main>
       </div>
     );
   }
@@ -161,6 +189,24 @@ export default function DashboardPage() {
         {/* ── Impact Stats ── */}
         <section className="hm-section">
           <h2 className="hm-section-title">Your Impact</h2>
+          {loading ? (
+            <div className="hm-stats-grid" aria-busy="true" aria-label="Loading impact stats">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="hm-stat-card">
+                  <Skeleton width={40} height={40} radius={12} />
+                  <div style={{ marginTop: 10 }}>
+                    <Skeleton width="55%" height={22} />
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <Skeleton width="70%" height={12} />
+                  </div>
+                  <div style={{ marginTop: 6 }}>
+                    <Skeleton width="50%" height={10} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="hm-stats-grid">
             <div className="hm-stat-card">
               <div className="hm-stat-icon hm-stat-icon-orange">$</div>
@@ -189,6 +235,7 @@ export default function DashboardPage() {
               <div className="hm-stat-hint">Keep it going!</div>
             </div>
           </div>
+          )}
         </section>
 
         {/* ── Articles + Impact Split ── */}
@@ -200,11 +247,33 @@ export default function DashboardPage() {
               <h2 className="hm-section-title">Stories to Read</h2>
               <a href="/articles" className="hm-see-all">See all →</a>
             </div>
+            {loading && (
+              <div className="hm-articles" aria-busy="true" aria-label="Loading stories">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <article key={i} className="hm-article-card">
+                    <div className="hm-article-top">
+                      <Skeleton width={90} height={12} />
+                      <Skeleton width={70} height={12} />
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <Skeleton height={22} width="85%" />
+                    </div>
+                    <div style={{ marginTop: 10, marginBottom: 12 }}>
+                      <SkeletonText lines={2} />
+                    </div>
+                    <div className="hm-article-footer">
+                      <Skeleton width={70} height={12} />
+                      <Skeleton width={90} height={32} radius={8} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
             <div className="hm-articles">
-              {stories.length === 0 && (
+              {!loading && stories.length === 0 && (
                 <p className="hm-empty">No stories available right now — check back soon.</p>
               )}
-              {stories.map((a) => (
+              {!loading && stories.map((a) => (
                 <article key={a.public_id} className={`hm-article-card${a.is_read ? " hm-article-read" : ""}`}>
                   <div className="hm-article-top">
                     <span className="hm-article-org">{a.organization.name ?? "NarLit"}</span>
@@ -233,6 +302,20 @@ export default function DashboardPage() {
             <section className="hm-panel">
               <h2 className="hm-panel-title">Where Your ${subscriptionAmount} Goes</h2>
               <p className="hm-panel-sub">This month's breakdown</p>
+              {loading && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }} aria-busy="true" aria-label="Loading breakdown">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <Skeleton width={80} height={14} />
+                      <div style={{ flex: 1 }}>
+                        <Skeleton width="100%" height={10} radius={5} />
+                      </div>
+                      <Skeleton width={36} height={14} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!loading && (
               <div className="hm-rule-bars">
                 <div className="hm-rule-row">
                   <span className="hm-rule-label">Nonprofits</span>
@@ -265,15 +348,32 @@ export default function DashboardPage() {
                   <span className="hm-rule-pct">{breakdown?.growth.percent ?? 0}%</span>
                 </div>
               </div>
+              )}
+              {!loading && (
               <div className="hm-rule-note">
                 ${nonprofitAmount} of your ${subscriptionAmount} supports nonprofits based on reading engagement.
               </div>
+              )}
             </section>
 
             {/* Funding breakdown */}
             <section className="hm-panel">
               <h2 className="hm-panel-title">Your Funding Breakdown</h2>
               <p className="hm-panel-sub">Based on articles read this month</p>
+              {loading && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }} aria-busy="true" aria-label="Loading funding">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <Skeleton width={110} height={14} />
+                      <div style={{ flex: 1 }}>
+                        <Skeleton width="100%" height={10} radius={5} />
+                      </div>
+                      <Skeleton width={30} height={14} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!loading && (
               <div className="hm-impact-list">
                 {funding.length === 0 && (
                   <p className="hm-empty">Read your first story to start funding nonprofits.</p>
@@ -297,6 +397,7 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
+              )}
             </section>
 
           </div>

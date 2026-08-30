@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface Article {
   public_id: string;
@@ -76,32 +78,78 @@ function HorizontalRow({ title, articles, seeAllHref }: { title: string; article
   );
 }
 
+function SkeletonRow({ title }: { title: string }) {
+  return (
+    <section className="hm-section">
+      <div className="hm-section-header">
+        <h2 className="hm-section-title">{title}</h2>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridAutoColumns: "minmax(280px, 320px)",
+          gridAutoFlow: "column",
+          gap: 14,
+          overflowX: "auto",
+          padding: "4px 0 12px",
+        }}
+        aria-busy="true"
+        aria-label={`Loading ${title}`}
+      >
+        {Array.from({ length: 4 }).map((_, i) => (
+          <article key={i} className="hm-article-card">
+            <div className="hm-article-top">
+              <Skeleton width={90} height={12} />
+              <Skeleton width={70} height={12} />
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <Skeleton height={22} width="85%" />
+            </div>
+            <div style={{ marginTop: 10, marginBottom: 12 }}>
+              <SkeletonText lines={2} />
+            </div>
+            <div className="hm-article-footer">
+              <Skeleton width={70} height={12} />
+              <Skeleton width={90} height={32} radius={8} />
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function ExplorePage() {
   const [user, setUser] = useState<User | null>(null);
   const [data, setData] = useState<ExplorePayload | null>(null);
   const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [meRes, exRes] = await Promise.all([apiFetch("/auth/me"), apiFetch("/member/explore")]);
+      const meData = await meRes.json();
+      const exData = await exRes.json();
+      setUser(meData.data?.user ?? meData.data ?? null);
+      if (exRes.ok) setData(exData.data?.explore ?? null);
+      else setError(exData?.message ?? "Failed to load explore.");
+    } catch { setError("Failed to load explore."); }
+    setLoading(false);
+  }
 
   useEffect(() => {
     validateSession().then(async (valid) => {
       if (!valid) { clearToken(); window.location.href = "/login"; return; }
-      try {
-        const [meRes, exRes] = await Promise.all([apiFetch("/auth/me"), apiFetch("/member/explore")]);
-        const meData = await meRes.json();
-        const exData = await exRes.json();
-        setUser(meData.data?.user ?? meData.data ?? null);
-        if (exRes.ok) setData(exData.data?.explore ?? null);
-        else setError(exData?.message ?? "Failed to load explore.");
-      } catch { setError("Failed to load explore."); }
       setChecking(false);
+      load();
     });
   }, []);
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -114,7 +162,32 @@ export default function ExplorePage() {
       <main className="hm-main">
         {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
 
-        {hero && (
+        {loading && (
+          <>
+            <section className="hm-welcome" aria-busy="true" aria-label="Loading featured">
+              <div className="hm-welcome-inner">
+                <div style={{ flex: 1 }}>
+                  <Skeleton width={130} height={12} />
+                  <div style={{ marginTop: 10 }}>
+                    <Skeleton width="75%" height={26} />
+                  </div>
+                  <div style={{ marginTop: 10 }}>
+                    <SkeletonText lines={2} />
+                  </div>
+                  <div style={{ marginTop: 10 }}>
+                    <Skeleton width={200} height={12} />
+                  </div>
+                </div>
+                <Skeleton width={140} height={36} radius={999} />
+              </div>
+            </section>
+            <SkeletonRow title="🔥 Trending this week" />
+            <SkeletonRow title="✨ For you" />
+            <SkeletonRow title="🆕 New this week" />
+          </>
+        )}
+
+        {!loading && hero && (
           <section
             className="hm-welcome"
             style={{
@@ -144,21 +217,25 @@ export default function ExplorePage() {
           </section>
         )}
 
-        <HorizontalRow title="🔥 Trending this week" articles={data?.trending ?? []} seeAllHref="/articles" />
-        <HorizontalRow title="✨ For you" articles={data?.for_you ?? []} />
-        <HorizontalRow title="🆕 New this week" articles={data?.new_this_week ?? []} />
+        {!loading && (
+          <>
+            <HorizontalRow title="🔥 Trending this week" articles={data?.trending ?? []} seeAllHref="/articles" />
+            <HorizontalRow title="✨ For you" articles={data?.for_you ?? []} />
+            <HorizontalRow title="🆕 New this week" articles={data?.new_this_week ?? []} />
 
-        {(data?.by_category ?? []).map((sec) => (
-          <HorizontalRow
-            key={sec.category}
-            title={`${sec.icon} ${sec.category}`}
-            articles={sec.articles}
-            seeAllHref={`/articles?category=${encodeURIComponent(sec.category)}`}
-          />
-        ))}
+            {(data?.by_category ?? []).map((sec) => (
+              <HorizontalRow
+                key={sec.category}
+                title={`${sec.icon} ${sec.category}`}
+                articles={sec.articles}
+                seeAllHref={`/articles?category=${encodeURIComponent(sec.category)}`}
+              />
+            ))}
 
-        {(!data || (data.featured.length === 0 && data.trending.length === 0)) && (
-          <p className="hm-empty">Nothing to explore yet — check back soon.</p>
+            {(!data || (data.featured.length === 0 && data.trending.length === 0)) && (
+              <p className="hm-empty">Nothing to explore yet — check back soon.</p>
+            )}
+          </>
         )}
       </main>
     </div>

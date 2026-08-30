@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface Category { key: string; label: string; icon: string; }
 interface OrgSuggestion { public_id: string; organization_name: string; mission_statement: string | null; category: string | null; logo_url: string | null; }
@@ -83,9 +84,7 @@ export default function OnboardingPage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 

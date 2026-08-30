@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { safeImageSrc } from "@/lib/safeUrl";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface OrgCard {
   public_id: string;
@@ -27,7 +30,7 @@ export default function OrganizationsPage() {
   const [selectedCat, setSelectedCat] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [checking, setChecking] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   async function load() {
@@ -51,13 +54,12 @@ export default function OrganizationsPage() {
   useEffect(() => {
     validateSession().then(async (valid) => {
       if (!valid) { clearToken(); window.location.href = "/login"; return; }
-      try {
-        const meRes = await apiFetch("/auth/me");
-        const meData = await meRes.json();
-        setUser(meData.data?.user ?? meData.data ?? null);
-      } catch { /* ignore */ }
-      await load();
       setChecking(false);
+      apiFetch("/auth/me")
+        .then((r) => r.json())
+        .then((d) => setUser(d.data?.user ?? d.data ?? null))
+        .catch(() => {});
+      load();
     });
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [selectedCat]);
@@ -69,9 +71,7 @@ export default function OrganizationsPage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -124,11 +124,39 @@ export default function OrganizationsPage() {
           </div>
 
           {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
-          {loading && <p className="hm-empty">Loading…</p>}
+
+          {loading && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }} aria-busy="true" aria-label="Loading organizations">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="hm-panel" style={{ padding: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                    <Skeleton width={48} height={48} radius={10} />
+                    <div style={{ flex: 1 }}>
+                      <Skeleton width="70%" height={16} />
+                      <div style={{ marginTop: 6 }}>
+                        <Skeleton width="45%" height={10} />
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 10 }}>
+                    <Skeleton width={90} height={20} radius={999} />
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <SkeletonText lines={2} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+                    <Skeleton width={90} height={12} />
+                    <Skeleton width={90} height={12} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {!loading && orgs.length === 0 && <p className="hm-empty">No organizations found.</p>}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-            {orgs.map((o) => (
+            {!loading && orgs.map((o) => (
               <a
                 key={o.public_id}
                 href={`/organizations/${o.public_id}`}
@@ -137,7 +165,7 @@ export default function OrganizationsPage() {
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
                   {o.logo_url ? (
-                    <img src={o.logo_url} alt="" style={{ width: 48, height: 48, borderRadius: 10, objectFit: "cover" }} />
+                    <img src={safeImageSrc(o.logo_url)} alt="" style={{ width: 48, height: 48, borderRadius: 10, objectFit: "cover" }} />
                   ) : (
                     <div
                       style={{

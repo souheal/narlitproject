@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { Skeleton } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface OrgProfile {
   organization_name: string;
@@ -55,28 +57,36 @@ const STATUS_BADGE: Record<string, string> = {
 export default function OrgDashboardPage() {
   const [data, setData] = useState<OrgDashboard | null>(null);
   const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [navOpen, setNavOpen] = useState(false);
   const [error, setError] = useState("");
 
+  async function loadDashboard() {
+    setLoading(true);
+    try {
+      const res = await apiFetch("/organization/dashboard");
+      const payload = await res.json();
+      if (!res.ok) {
+        setError(payload?.message ?? "Failed to load dashboard.");
+      } else {
+        setData(payload.data?.dashboard ?? null);
+      }
+    } catch {
+      setError("Failed to load dashboard.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    validateSession().then(async (valid) => {
+    validateSession().then((valid) => {
       if (!valid) {
         clearToken();
         window.location.href = "/login";
         return;
       }
-      try {
-        const res = await apiFetch("/organization/dashboard");
-        const payload = await res.json();
-        if (!res.ok) {
-          setError(payload?.message ?? "Failed to load dashboard.");
-        } else {
-          setData(payload.data?.dashboard ?? null);
-        }
-      } catch {
-        setError("Failed to load dashboard.");
-      }
       setChecking(false);
+      loadDashboard();
     });
   }, []);
 
@@ -88,11 +98,7 @@ export default function OrgDashboardPage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" />
-        <span className="hm-loading-dot" />
-        <span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -169,18 +175,37 @@ export default function OrgDashboardPage() {
 
         <section className="hm-section">
           <h2 className="hm-section-title">Overview</h2>
-          <div className="hm-stats-grid">
-            {stats.map((stat, idx) => (
-              <div key={idx} className="hm-stat-card">
-                <div className={`hm-stat-icon hm-stat-icon-${["orange", "teal", "purple", "orange"][idx]}`}>
-                  {["$", "📖", "📝", "💰"][idx]}
+          {loading && !data ? (
+            <div className="hm-stats-grid" aria-busy="true" aria-label="Loading stats">
+              {Array.from({ length: 4 }).map((_, idx) => (
+                <div key={idx} className="hm-stat-card">
+                  <Skeleton width={40} height={40} radius={10} />
+                  <div style={{ marginTop: 10 }}>
+                    <Skeleton height={26} width="60%" />
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <Skeleton height={12} width="80%" />
+                  </div>
+                  <div style={{ marginTop: 6 }}>
+                    <Skeleton height={10} width="50%" />
+                  </div>
                 </div>
-                <div className="hm-stat-value">{stat.value}</div>
-                <div className="hm-stat-label">{stat.label}</div>
-                {stat.hint && <div className="hm-stat-hint">{stat.hint}</div>}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="hm-stats-grid">
+              {stats.map((stat, idx) => (
+                <div key={idx} className="hm-stat-card">
+                  <div className={`hm-stat-icon hm-stat-icon-${["orange", "teal", "purple", "orange"][idx]}`}>
+                    {["$", "📖", "📝", "💰"][idx]}
+                  </div>
+                  <div className="hm-stat-value">{stat.value}</div>
+                  <div className="hm-stat-label">{stat.label}</div>
+                  {stat.hint && <div className="hm-stat-hint">{stat.hint}</div>}
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <div className="hm-content-grid">
@@ -189,59 +214,98 @@ export default function OrgDashboardPage() {
               <h2 className="hm-section-title">Recent Articles</h2>
               <a href="/organization/articles" className="hm-see-all">See all →</a>
             </div>
-            <div className="hm-articles">
-              {recent.length === 0 && (
-                <p className="hm-empty">
-                  No articles yet.{" "}
-                  <a href="/organization/articles/new" className="su-link">Submit your first one</a>.
-                </p>
-              )}
-              {recent.map((a) => (
-                <article key={a.public_id} className="hm-article-card">
-                  <div className="hm-article-top">
-                    <span className="hm-article-org">{STATUS_BADGE[a.status] ?? a.status}</span>
-                    {a.published_at && (
-                      <span className="hm-article-cat">
-                        {new Date(a.published_at).toLocaleDateString()}
+            {loading && !data ? (
+              <div className="hm-articles" aria-busy="true" aria-label="Loading recent articles">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <article key={i} className="hm-article-card">
+                    <div className="hm-article-top">
+                      <Skeleton width={90} height={12} />
+                      <Skeleton width={70} height={12} />
+                    </div>
+                    <div style={{ marginTop: 10, marginBottom: 10 }}>
+                      <Skeleton height={22} width="85%" />
+                    </div>
+                    <div className="hm-article-footer">
+                      <Skeleton width={140} height={12} />
+                      <Skeleton width={90} height={32} radius={8} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="hm-articles">
+                {recent.length === 0 && (
+                  <p className="hm-empty">
+                    No articles yet.{" "}
+                    <a href="/organization/articles/new" className="su-link">Submit your first one</a>.
+                  </p>
+                )}
+                {recent.map((a) => (
+                  <article key={a.public_id} className="hm-article-card">
+                    <div className="hm-article-top">
+                      <span className="hm-article-org">{STATUS_BADGE[a.status] ?? a.status}</span>
+                      {a.published_at && (
+                        <span className="hm-article-cat">
+                          {new Date(a.published_at).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="hm-article-title">{a.title}</h3>
+                    <div className="hm-article-footer">
+                      <span className="hm-article-time">
+                        {a.total_reads} reads · {a.total_unique_reads} unique
                       </span>
-                    )}
-                  </div>
-                  <h3 className="hm-article-title">{a.title}</h3>
-                  <div className="hm-article-footer">
-                    <span className="hm-article-time">
-                      {a.total_reads} reads · {a.total_unique_reads} unique
-                    </span>
-                    <a href={`/organization/articles/${a.public_id}`} className="hm-article-btn">
-                      Manage →
-                    </a>
-                  </div>
-                </article>
-              ))}
-            </div>
+                      <a href={`/organization/articles/${a.public_id}`} className="hm-article-btn">
+                        Manage →
+                      </a>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
 
           <div className="hm-side">
             <section className="hm-panel">
               <h2 className="hm-panel-title">Monthly Reads</h2>
               <p className="hm-panel-sub">Last 6 months of engagement</p>
-              <div className="hm-impact-list">
-                {monthly.length === 0 && <p className="hm-empty">No data yet.</p>}
-                {monthly.map((m) => (
-                  <div key={m.month} className="hm-impact-row">
-                    <div className="hm-impact-info">
-                      <span className="hm-impact-org">{m.month}</span>
-                      <span className="hm-impact-reads">{m.reads} reads</span>
+              {loading && !data ? (
+                <div className="hm-impact-list" aria-busy="true" aria-label="Loading monthly reads">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="hm-impact-row">
+                      <div className="hm-impact-info">
+                        <Skeleton width={60} height={12} />
+                        <div style={{ marginTop: 4 }}>
+                          <Skeleton width={80} height={10} />
+                        </div>
+                      </div>
+                      <div className="hm-impact-bar-wrap">
+                        <Skeleton height={8} width="100%" radius={4} />
+                      </div>
+                      <Skeleton width={30} height={12} />
                     </div>
-                    <div className="hm-impact-bar-wrap">
-                      <div
-                        className="hm-impact-bar"
-                        style={{ width: `${Math.round((m.reads / maxMonthly) * 100)}%`, background: "var(--teal)" }}
-                      />
+                  ))}
+                </div>
+              ) : (
+                <div className="hm-impact-list">
+                  {monthly.length === 0 && <p className="hm-empty">No data yet.</p>}
+                  {monthly.map((m) => (
+                    <div key={m.month} className="hm-impact-row">
+                      <div className="hm-impact-info">
+                        <span className="hm-impact-org">{m.month}</span>
+                        <span className="hm-impact-reads">{m.reads} reads</span>
+                      </div>
+                      <div className="hm-impact-bar-wrap">
+                        <div
+                          className="hm-impact-bar"
+                          style={{ width: `${Math.round((m.reads / maxMonthly) * 100)}%`, background: "var(--teal)" }}
+                        />
+                      </div>
+                      <span className="hm-impact-pct">{Math.round((m.reads / maxMonthly) * 100)}%</span>
                     </div>
-                    <span className="hm-impact-pct">{Math.round((m.reads / maxMonthly) * 100)}%</span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </section>
 
             <section className="hm-panel">

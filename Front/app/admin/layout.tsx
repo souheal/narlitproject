@@ -8,12 +8,10 @@ import { adminFetch } from "@/lib/api";
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  if (pathname === "/admin/login") return <>{children}</>;
-
   async function handleLogout() {
     try { await adminFetch("/auth/logout", { method: "POST" }); } catch { /* noop */ }
     clearAdminToken();
-    window.location.href = "/admin/login";
+    window.location.href = "/login";
   }
 
   const navItems = [

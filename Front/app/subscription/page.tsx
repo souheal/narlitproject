@@ -4,6 +4,9 @@ import { useEffect, useState, useTransition } from "react";
 import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
+import { safeHref, EXTERNAL_LINK_REL } from "@/lib/safeUrl";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { BrandLoader } from "@/components/BrandLoader";
 
 interface Subscription {
   public_id: string | null;
@@ -55,12 +58,14 @@ export default function SubscriptionPage() {
   const [user, setUser] = useState<User | null>(null);
   const [data, setData] = useState<SubPayload | null>(null);
   const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
   const [showCancelModal, setShowCancelModal] = useState(false);
 
   async function load() {
+    setLoading(true);
     try {
       const [meRes, subRes] = await Promise.all([apiFetch("/auth/me"), apiFetch("/member/subscription")]);
       const meData = await meRes.json();
@@ -69,13 +74,14 @@ export default function SubscriptionPage() {
       if (subRes.ok) setData(subData.data ?? null);
       else setError(subData?.message ?? "Failed to load subscription.");
     } catch { setError("Failed to load subscription."); }
+    setLoading(false);
   }
 
   useEffect(() => {
     validateSession().then(async (valid) => {
       if (!valid) { clearToken(); window.location.href = "/login"; return; }
-      await load();
       setChecking(false);
+      load();
     });
   }, []);
 
@@ -139,9 +145,7 @@ export default function SubscriptionPage() {
 
   if (checking) {
     return (
-      <div className="hm-loading" suppressHydrationWarning>
-        <span className="hm-loading-dot" /><span className="hm-loading-dot" /><span className="hm-loading-dot" />
-      </div>
+      <BrandLoader />
     );
   }
 
@@ -162,6 +166,70 @@ export default function SubscriptionPage() {
           {feedback && <p className="narlit-feedback narlit-feedback-success">{feedback}</p>}
           {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
 
+          {loading && (
+            <div aria-busy="true" aria-label="Loading subscription">
+              <div className="hm-panel" style={{ marginTop: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 240 }}>
+                    <Skeleton width="45%" height={22} />
+                    <div style={{ marginTop: 10 }}>
+                      <SkeletonText lines={2} />
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <Skeleton width={160} height={12} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <Skeleton width={180} height={32} radius={8} />
+                    <Skeleton width={180} height={32} radius={8} />
+                  </div>
+                </div>
+              </div>
+
+              <h2 className="hm-section-title" style={{ marginTop: 32 }}>Available plans</h2>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="hm-panel" style={{ padding: 20 }}>
+                    <Skeleton width="55%" height={18} />
+                    <div style={{ marginTop: 10 }}>
+                      <Skeleton width="40%" height={28} />
+                    </div>
+                    <div style={{ marginTop: 12 }}>
+                      <SkeletonText lines={4} />
+                    </div>
+                    <div style={{ marginTop: 12 }}>
+                      <Skeleton width="100%" height={32} radius={8} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <h2 className="hm-section-title" style={{ marginTop: 32 }}>Billing history</h2>
+              <div className="hm-panel">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      padding: "12px 0",
+                      borderTop: i === 0 ? "none" : "1px solid var(--line)",
+                    }}
+                  >
+                    <Skeleton width={90} height={14} />
+                    <Skeleton width={100} height={14} />
+                    <Skeleton width={80} height={14} />
+                    <div style={{ flex: 1 }} />
+                    <Skeleton width={70} height={20} radius={999} />
+                    <Skeleton width={90} height={14} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!loading && (
+          <>
           {/* Current status */}
           <div className="hm-panel" style={{ marginTop: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
@@ -292,7 +360,7 @@ export default function SubscriptionPage() {
                       </td>
                       <td style={{ textAlign: "right" }}>
                         {inv.pdf_url && (
-                          <a href={inv.pdf_url} target="_blank" rel="noreferrer" className="su-link">Download PDF</a>
+                          <a href={safeHref(inv.pdf_url)} target="_blank" rel={EXTERNAL_LINK_REL} className="su-link">Download PDF</a>
                         )}
                       </td>
                     </tr>
@@ -301,6 +369,8 @@ export default function SubscriptionPage() {
               </table>
             )}
           </div>
+          </>
+          )}
         </section>
       </main>
 

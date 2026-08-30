@@ -1,7 +1,12 @@
 const MAX_AGE = 60 * 60 * 24 * 30;
 
+function cookieFlags(): string {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `SameSite=Strict${secure}`;
+}
+
 function setCookie(name: string, value: string, maxAge = MAX_AGE) {
-  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax`;
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; ${cookieFlags()}`;
 }
 
 function getCookie(name: string): string | null {
@@ -10,7 +15,7 @@ function getCookie(name: string): string | null {
 }
 
 function deleteCookie(name: string) {
-  document.cookie = `${name}=; path=/; max-age=0`;
+  document.cookie = `${name}=; path=/; max-age=0; ${cookieFlags()}`;
 }
 
 // User
