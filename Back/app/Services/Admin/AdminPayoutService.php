@@ -306,59 +306,65 @@ class AdminPayoutService
 
     protected function processItem(PayoutItem $item): void
     {
-        $item = PayoutItem::query()->with(['batch', 'organizationProfile'])->whereKey($item->id)->lockForUpdate()->first();
+        DB::transaction(function () use ($item): void {
+            $item = PayoutItem::query()
+                ->with(['batch', 'organizationProfile'])
+                ->whereKey($item->id)
+                ->lockForUpdate()
+                ->first();
 
-        if ($item === null || $item->transfer_status !== 'pending') {
-            return;
-        }
+            if ($item === null || $item->transfer_status !== 'pending') {
+                return;
+            }
 
-        if ($item->stripe_transfer_id !== null) {
-            $item->forceFill(['transfer_status' => 'completed', 'transferred_at' => $item->transferred_at ?? now()])->save();
+            if ($item->stripe_transfer_id !== null) {
+                $item->forceFill(['transfer_status' => 'completed', 'transferred_at' => $item->transferred_at ?? now()])->save();
 
-            return;
-        }
+                return;
+            }
 
-        $organization = $item->organizationProfile;
+            $organization = $item->organizationProfile;
 
-        if ($organization?->stripe_connect_account_id === null || ! $organization->payouts_enabled) {
-            $this->failItem($item, 'Organization is missing Stripe Connect payout setup.');
+            if ($organization?->stripe_connect_account_id === null || ! $organization->payouts_enabled) {
+                $this->failItem($item, 'Organization is missing Stripe Connect payout setup.');
 
-            return;
-        }
+                return;
+            }
 
-        if (! (bool) config('services.stripe.fake_checkout', false) && ! (bool) config('services.stripe.transfers_enabled', false)) {
-            $this->failItem($item, 'Stripe transfers are disabled for this environment.');
+            if (! (bool) config('services.stripe.fake_checkout', false) && ! (bool) config('services.stripe.transfers_enabled', false)) {
+                $this->failItem($item, 'Stripe transfers are disabled for this environment.');
 
-            return;
-        }
+                return;
+            }
 
-        try {
-            $transfer = (bool) config('services.stripe.fake_checkout', false)
-                ? (object) ['id' => 'fake_transfer_'.$item->id, 'status' => 'paid']
-                : $this->client()->transfers->create([
-                    'amount' => $this->decimalToCents((string) $item->payout_amount),
-                    'currency' => strtolower((string) config('services.stripe.currency', 'USD')),
-                    'destination' => $organization->stripe_connect_account_id,
-                    'metadata' => [
-                        'payout_item_id' => (string) $item->id,
-                        'payout_batch_id' => (string) $item->payout_batch_id,
-                    ],
-                ], [
-                    'idempotency_key' => $this->payoutTransferIdempotencyKey($item),
-                ]);
+            try {
+                $transfer = (bool) config('services.stripe.fake_checkout', false)
+                    ? (object) ['id' => 'fake_transfer_'.$item->id, 'status' => 'paid']
+                    : $this->client()->transfers->create([
+                        'amount' => $this->decimalToCents((string) $item->payout_amount),
+                        'currency' => strtolower((string) config('services.stripe.currency', 'USD')),
+                        'destination' => $organization->stripe_connect_account_id,
+                        'metadata' => [
+                            'payout_item_id' => (string) $item->id,
+                            'payout_batch_id' => (string) $item->payout_batch_id,
+                        ],
+                    ], [
+                        'idempotency_key' => $this->payoutTransferIdempotencyKey($item),
+                    ]);
 
-            $item->forceFill([
-                'stripe_transfer_id' => (string) $transfer->id,
-                'transfer_status' => 'completed',
-                'transferred_at' => now(),
-                'metadata' => array_merge($item->metadata ?? [], [
-                    'stripe_transfer_status' => (string) ($transfer->status ?? 'paid'),
-                    'failure_reason' => null,
-                ]),
-            ])->save();
-        } catch (\Throwable $exception) {
-            $this->failItem($item, $exception->getMessage());
-        }
+                $item->forceFill([
+                    'stripe_transfer_id' => (string) $transfer->id,
+                    'transfer_status' => 'completed',
+                    'transferred_at' => now(),
+                    'metadata' => array_merge($item->metadata ?? [], [
+                        'stripe_transfer_status' => (string) ($transfer->status ?? 'paid'),
+                        'failure_reason' => null,
+                    ]),
+                ])->save();
+            } catch (\Throwable $exception) {
+                $this->failItem($item, $exception->getMessage());
+            }
+        }, 3);
     }
 
     protected function failItem(PayoutItem $item, string $reason): void

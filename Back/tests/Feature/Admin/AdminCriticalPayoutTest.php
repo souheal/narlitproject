@@ -2,11 +2,14 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Jobs\ExecutePayoutBatchJob;
 use App\Models\PayoutBatch;
 use App\Models\PayoutItem;
+use App\Services\Admin\AdminPayoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Tests\Feature\Admin\Concerns\InteractsWithCriticalAdminData;
 use Tests\TestCase;
@@ -150,6 +153,51 @@ class AdminCriticalPayoutTest extends TestCase
             ->assertJsonPath('message', 'Only pending or failed payout batches can be executed.');
         $this->assertSame(1, PayoutItem::query()->whereNotNull('stripe_transfer_id')->count());
         $this->assertSame(1, $this->auditCount('payout_batch.execution_failed', $batch->public_id));
+    }
+
+    public function test_payout_execution_dispatches_queue_job_without_serialized_secrets(): void
+    {
+        Queue::fake();
+        config()->set('services.stripe.secret', 'sk_test_sensitive_secret');
+
+        $admin = $this->createAdminWithRole('admin_finance');
+        $organization = $this->createOrganizationProfile();
+        $batch = $this->createPendingPayoutBatch($organization);
+
+        Sanctum::actingAs($admin);
+
+        $this->withHeader('Idempotency-Key', (string) str()->uuid())
+            ->postJson("/api/v1/admin/payouts/{$batch->public_id}/execute")
+            ->assertOk()
+            ->assertJsonPath('data.payout_batch.status', 'processing');
+
+        Queue::assertPushed(ExecutePayoutBatchJob::class, function (ExecutePayoutBatchJob $job) use ($batch): bool {
+            $payload = serialize($job);
+
+            $this->assertSame($batch->id, $job->payoutBatchId);
+            $this->assertSame(3, $job->tries);
+            $this->assertSame(80, $job->timeout);
+            $this->assertSame([60, 300, 900], $job->backoff());
+            $this->assertStringNotContainsString('sk_test_sensitive_secret', $payload);
+
+            return true;
+        });
+    }
+
+    public function test_duplicate_payout_job_execution_does_not_duplicate_transfers(): void
+    {
+        $organization = $this->createOrganizationProfile();
+        $batch = $this->createPendingPayoutBatch($organization);
+        $item = $batch->items()->firstOrFail();
+
+        app(AdminPayoutService::class)->processBatch($batch->id);
+        app(AdminPayoutService::class)->processBatch($batch->id);
+
+        $item->refresh();
+        $this->assertSame('completed', $item->transfer_status);
+        $this->assertSame('fake_transfer_'.$item->id, $item->stripe_transfer_id);
+        $this->assertSame(1, PayoutItem::query()->whereNotNull('stripe_transfer_id')->count());
+        $this->assertSame('completed', $batch->refresh()->status);
     }
 
     public function test_payout_execution_handles_missing_connect_retry_and_permissions(): void

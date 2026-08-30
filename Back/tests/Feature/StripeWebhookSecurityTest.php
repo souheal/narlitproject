@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Payment;
+use App\Models\OrganizationProfile;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Billing\StripeWebhookService;
@@ -215,6 +216,193 @@ class StripeWebhookSecurityTest extends TestCase
         $this->assertSame(1, Subscription::query()->where('stripe_subscription_id', 'sub_retry')->count());
     }
 
+    public function test_subscription_lifecycle_events_update_local_state_without_duplicate_records(): void
+    {
+        $user = $this->user();
+
+        $createdPayload = $this->eventPayload('evt_subscription_created', 'customer.subscription.created', $this->subscriptionObject([
+            'id' => 'sub_lifecycle',
+            'customer' => 'cus_lifecycle',
+            'status' => 'trialing',
+            'metadata' => [
+                'user_id' => (string) $user->id,
+                'plan' => 'yearly',
+            ],
+            'items' => [
+                'data' => [[
+                    'price' => [
+                        'unit_amount' => 12000,
+                        'recurring' => [
+                            'interval' => 'year',
+                        ],
+                    ],
+                ]],
+            ],
+        ]));
+
+        $this->signedPost($createdPayload)->assertOk()->assertJsonPath('message', 'Webhook processed.');
+
+        $subscription = Subscription::query()->where('stripe_subscription_id', 'sub_lifecycle')->firstOrFail();
+        $this->assertSame('active', $subscription->status);
+        $this->assertSame('yearly', $subscription->plan);
+        $this->assertTrue((bool) $user->refresh()->is_active);
+
+        $updatedPayload = $this->eventPayload('evt_subscription_updated', 'customer.subscription.updated', $this->subscriptionObject([
+            'id' => 'sub_lifecycle',
+            'customer' => 'cus_lifecycle',
+            'status' => 'past_due',
+            'metadata' => [
+                'user_id' => (string) $user->id,
+                'plan' => 'yearly',
+            ],
+            'items' => [
+                'data' => [[
+                    'price' => [
+                        'unit_amount' => 12000,
+                        'recurring' => [
+                            'interval' => 'year',
+                        ],
+                    ],
+                ]],
+            ],
+        ]));
+
+        $this->signedPost($updatedPayload)->assertOk();
+        $this->assertSame('past_due', $subscription->refresh()->status);
+        $this->assertFalse((bool) $user->refresh()->is_active);
+
+        $deletedPayload = $this->eventPayload('evt_subscription_deleted_actual', 'customer.subscription.deleted', $this->subscriptionObject([
+            'id' => 'sub_lifecycle',
+            'customer' => 'cus_lifecycle',
+            'status' => 'canceled',
+            'canceled_at' => now()->timestamp,
+            'metadata' => [
+                'user_id' => (string) $user->id,
+                'plan' => 'yearly',
+            ],
+            'items' => [
+                'data' => [[
+                    'price' => [
+                        'unit_amount' => 12000,
+                        'recurring' => [
+                            'interval' => 'year',
+                        ],
+                    ],
+                ]],
+            ],
+        ]));
+
+        $this->signedPost($deletedPayload)->assertOk();
+        $this->assertSame('canceled', $subscription->refresh()->status);
+        $this->assertNotNull($subscription->canceled_at);
+        $this->assertSame(1, Subscription::query()->where('stripe_subscription_id', 'sub_lifecycle')->count());
+    }
+
+    public function test_invoice_payment_succeeded_uses_existing_subscription_and_is_idempotent(): void
+    {
+        $user = $this->user();
+        $subscription = $this->subscription($user, [
+            'stripe_subscription_id' => 'sub_invoice_existing',
+            'status' => 'active',
+        ]);
+
+        $payload = $this->eventPayload('evt_invoice_existing_paid', 'invoice.payment_succeeded', [
+            'id' => 'in_existing_paid',
+            'object' => 'invoice',
+            'subscription' => 'sub_invoice_existing',
+            'payment_intent' => 'pi_existing_paid',
+            'amount_paid' => 700,
+            'currency' => 'usd',
+        ]);
+
+        $this->signedPost($payload)->assertOk()->assertJsonPath('message', 'Webhook processed.');
+        $this->signedPost($payload)->assertOk()->assertJsonPath('message', 'Webhook event already processed.');
+
+        $this->assertTrue((bool) $user->refresh()->is_active);
+        $this->assertSame(1, Payment::query()->where('stripe_payment_intent', 'pi_existing_paid')->count());
+        $this->assertDatabaseHas('payments', [
+            'user_id' => $user->id,
+            'subscription_id' => $subscription->id,
+            'stripe_invoice_id' => 'in_existing_paid',
+            'status' => 'paid',
+            'amount' => '7',
+        ]);
+    }
+
+    public function test_invoice_payment_failed_marks_subscription_past_due_without_granting_access(): void
+    {
+        $user = $this->user(['is_active' => true]);
+        $this->subscription($user, [
+            'stripe_subscription_id' => 'sub_invoice_failed',
+            'status' => 'active',
+        ]);
+
+        $payload = $this->eventPayload('evt_invoice_failed_actual', 'invoice.payment_failed', [
+            'id' => 'in_failed_actual',
+            'object' => 'invoice',
+            'subscription' => 'sub_invoice_failed',
+            'currency' => 'usd',
+        ]);
+
+        $this->signedPost($payload)->assertOk()->assertJsonPath('message', 'Webhook processed.');
+
+        $subscription = Subscription::query()->where('stripe_subscription_id', 'sub_invoice_failed')->firstOrFail();
+        $this->assertSame('past_due', $subscription->status);
+        $this->assertFalse((bool) $user->refresh()->is_active);
+        $this->assertSame(0, Payment::query()->count());
+        $this->assertSame('in_failed_actual', $subscription->metadata['last_failed_invoice_id']);
+    }
+
+    public function test_charge_refunded_reconciles_existing_payment_without_duplicate_refund_action(): void
+    {
+        $user = $this->user();
+        $subscription = $this->subscription($user);
+        $payment = $this->payment($user, $subscription, [
+            'stripe_payment_intent' => 'pi_refunded_webhook',
+            'status' => 'paid',
+        ]);
+
+        $payload = $this->eventPayload('evt_charge_refunded', 'charge.refunded', [
+            'id' => 'ch_refunded',
+            'object' => 'charge',
+            'payment_intent' => 'pi_refunded_webhook',
+            'amount' => 700,
+            'amount_captured' => 700,
+            'amount_refunded' => 700,
+            'refunded' => true,
+        ]);
+
+        $this->signedPost($payload)->assertOk()->assertJsonPath('message', 'Webhook processed.');
+        $this->signedPost($payload)->assertOk()->assertJsonPath('message', 'Webhook event already processed.');
+
+        $payment->refresh();
+        $this->assertSame('refunded', $payment->status);
+        $this->assertNotNull($payment->refunded_at);
+        $this->assertSame('ch_refunded', $payment->metadata['stripe_refund_reconciliation']['stripe_charge_id']);
+        $this->assertSame(1, Payment::query()->where('stripe_payment_intent', 'pi_refunded_webhook')->count());
+    }
+
+    public function test_account_updated_reconciles_connect_status_for_existing_organization(): void
+    {
+        $organization = $this->organization();
+
+        $payload = $this->eventPayload('evt_account_updated', 'account.updated', [
+            'id' => 'acct_webhook',
+            'object' => 'account',
+            'charges_enabled' => true,
+            'payouts_enabled' => true,
+            'details_submitted' => true,
+        ]);
+
+        $this->signedPost($payload)->assertOk()->assertJsonPath('message', 'Webhook processed.');
+
+        $organization->refresh();
+        $this->assertTrue($organization->charges_enabled);
+        $this->assertTrue($organization->payouts_enabled);
+        $this->assertTrue($organization->metadata['stripe_connect']['details_submitted']);
+        $this->assertSame('evt_account_updated', $organization->metadata['stripe_connect']['stripe_event_id']);
+    }
+
     private function signedPost(string $payload)
     {
         return $this->rawWebhookPost($payload);
@@ -259,31 +447,113 @@ class StripeWebhookSecurityTest extends TestCase
         return new FakeStripeWebhookService(app(SubscriptionService::class), $failEventId);
     }
 
-    private function user(): User
+    private function user(array $overrides = []): User
     {
         $roleId = DB::table('roles')->insertGetId([
-            'name' => 'subscriber',
+            'name' => 'subscriber_'.str()->random(8),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        return User::create([
+        return User::create(array_merge([
             'public_id' => (string) str()->uuid(),
             'role_id' => $roleId,
             'full_name' => 'Stripe Webhook User',
-            'username' => 'stripe_webhook_user',
-            'email' => 'stripe-webhook@test.com',
+            'username' => 'stripe_webhook_user_'.str()->random(8),
+            'email' => 'stripe-webhook-'.str()->random(8).'@test.com',
             'phone' => '+10000000000',
             'password' => 'Password123!',
             'email_verified_at' => now(),
             'is_active' => false,
             'failed_login_attempts' => 0,
+        ], $overrides));
+    }
+
+    private function subscription(User $user, array $overrides = []): Subscription
+    {
+        return Subscription::query()->create(array_merge([
+            'public_id' => (string) str()->uuid(),
+            'user_id' => $user->id,
+            'stripe_customer_id' => 'cus_'.str()->random(8),
+            'stripe_subscription_id' => 'sub_'.str()->random(8),
+            'plan' => 'monthly',
+            'amount' => '7.00',
+            'currency' => 'USD',
+            'status' => 'active',
+            'started_at' => now()->subDay(),
+            'expires_at' => now()->addMonth(),
+        ], $overrides));
+    }
+
+    private function payment(User $user, Subscription $subscription, array $overrides = []): Payment
+    {
+        return Payment::query()->create(array_merge([
+            'public_id' => (string) str()->uuid(),
+            'user_id' => $user->id,
+            'subscription_id' => $subscription->id,
+            'stripe_payment_intent' => 'pi_'.str()->random(8),
+            'stripe_invoice_id' => 'in_'.str()->random(8),
+            'amount' => '7.00',
+            'stripe_fee' => '0.00',
+            'net_amount' => '7.00',
+            'currency' => 'USD',
+            'status' => 'paid',
+            'paid_at' => now(),
+        ], $overrides));
+    }
+
+    private function organization(): OrganizationProfile
+    {
+        $user = $this->user();
+
+        return OrganizationProfile::query()->create([
+            'public_id' => (string) str()->uuid(),
+            'user_id' => $user->id,
+            'organization_name' => 'Webhook Org',
+            'tax_id' => (string) random_int(100000000, 999999999),
+            'certificate_file' => 'organization-certificates/test.pdf',
+            'irs_verified' => true,
+            'verification_status' => 'approved',
+            'stripe_connect_account_id' => 'acct_webhook',
+            'payouts_enabled' => false,
+            'charges_enabled' => false,
         ]);
+    }
+
+    private function subscriptionObject(array $overrides = []): array
+    {
+        return array_replace_recursive([
+            'id' => 'sub_test',
+            'object' => 'subscription',
+            'customer' => 'cus_test',
+            'status' => 'active',
+            'currency' => 'usd',
+            'current_period_start' => now()->subDay()->timestamp,
+            'current_period_end' => now()->addMonth()->timestamp,
+            'canceled_at' => null,
+            'trial_end' => null,
+            'metadata' => [
+                'plan' => 'monthly',
+            ],
+            'items' => [
+                'data' => [
+                    [
+                        'price' => [
+                            'unit_amount' => 700,
+                            'recurring' => [
+                                'interval' => 'month',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ], $overrides);
     }
 
     private function createTestSchema(): void
     {
         Schema::dropIfExists('stripe_webhook_events');
+        Schema::dropIfExists('organization_profiles');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('subscriptions');
         Schema::dropIfExists('users');
@@ -307,6 +577,25 @@ class StripeWebhookSecurityTest extends TestCase
             $table->timestamp('email_verified_at')->nullable();
             $table->boolean('is_active')->default(false);
             $table->integer('failed_login_attempts')->default(0);
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('organization_profiles', function (Blueprint $table): void {
+            $table->id();
+            $table->uuid('public_id')->unique();
+            $table->foreignId('user_id')->unique()->constrained('users');
+            $table->string('organization_name');
+            $table->string('tax_id')->unique();
+            $table->string('certificate_file');
+            $table->boolean('irs_verified')->default(false);
+            $table->string('verification_status')->default('pending');
+            $table->foreignId('reviewed_by')->nullable();
+            $table->timestamp('reviewed_at')->nullable();
+            $table->string('stripe_connect_account_id')->nullable()->unique();
+            $table->boolean('payouts_enabled')->default(false);
+            $table->boolean('charges_enabled')->default(false);
+            $table->json('metadata')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

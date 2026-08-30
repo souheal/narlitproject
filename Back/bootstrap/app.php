@@ -2,6 +2,7 @@
 
 use App\Console\Commands\CleanupIdempotencyKeys;
 use App\Console\Commands\CleanupExpiredSanctumTokens;
+use App\Console\Commands\CreateSuperAdmin;
 use App\Console\Commands\ImportIrsExemptOrganizations;
 use App\Exceptions\ApiException;
 use App\Http\Middleware\EnsureAdminAccess;
@@ -31,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withCommands([
         CleanupExpiredSanctumTokens::class,
         CleanupIdempotencyKeys::class,
+        CreateSuperAdmin::class,
         ImportIrsExemptOrganizations::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {

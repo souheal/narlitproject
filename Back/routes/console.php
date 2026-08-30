@@ -8,5 +8,5 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('idempotency:cleanup')->hourly();
-Schedule::command('sanctum:cleanup-expired-tokens')->daily();
+Schedule::command('idempotency:cleanup')->hourly()->withoutOverlapping();
+Schedule::command('sanctum:cleanup-expired-tokens')->daily()->withoutOverlapping();

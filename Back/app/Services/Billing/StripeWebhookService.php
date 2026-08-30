@@ -3,6 +3,7 @@
 namespace App\Services\Billing;
 
 use App\Exceptions\ApiException;
+use App\Models\OrganizationProfile;
 use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\User;
@@ -42,6 +43,8 @@ class StripeWebhookService
                     'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted' => $this->handleSubscriptionEvent($event),
                     'invoice.payment_succeeded' => $this->handleInvoicePaid($event),
                     'invoice.payment_failed' => $this->handleInvoiceFailed($event),
+                    'charge.refunded' => $this->handleChargeRefunded($event),
+                    'account.updated' => $this->handleAccountUpdated($event),
                     default => false,
                 };
 
@@ -73,7 +76,7 @@ class StripeWebhookService
         }
 
         $user = $this->resolveUserFromMetadata((array) ($session->metadata ?? []), $session->client_reference_id ?? null);
-        $stripeSubscription = $this->client()->subscriptions->retrieve((string) $session->subscription, []);
+        $stripeSubscription = $this->stripeSubscriptionFrom($session->subscription);
         $subscription = $this->syncStripeSubscription($user, $stripeSubscription, (string) ($session->metadata->plan ?? 'monthly'));
 
         if (
@@ -107,9 +110,21 @@ class StripeWebhookService
             return false;
         }
 
-        $stripeSubscription = $this->client()->subscriptions->retrieve((string) $invoice->subscription, []);
-        $user = $this->resolveUserFromStripeSubscription($stripeSubscription);
-        $subscription = $this->syncStripeSubscription($user, $stripeSubscription, $this->resolvePlanFromStripe($stripeSubscription, $stripeSubscription->metadata->plan ?? null));
+        $subscription = null;
+        $user = null;
+
+        if (is_string($invoice->subscription)) {
+            $subscription = Subscription::query()
+                ->where('stripe_subscription_id', $invoice->subscription)
+                ->first();
+            $user = $subscription?->user;
+        }
+
+        if ($subscription === null || $user === null) {
+            $stripeSubscription = $this->stripeSubscriptionFrom($invoice->subscription);
+            $user = $this->resolveUserFromStripeSubscription($stripeSubscription);
+            $subscription = $this->syncStripeSubscription($user, $stripeSubscription, $this->resolvePlanFromStripe($stripeSubscription, $stripeSubscription->metadata->plan ?? null));
+        }
 
         $paymentIntent = is_string($invoice->payment_intent) ? $invoice->payment_intent : 'invoice_'.$invoice->id;
         $amount = ((int) ($invoice->amount_paid ?? 0)) / 100;
@@ -168,6 +183,81 @@ class StripeWebhookService
         ])->save();
 
         $this->subscriptionService->deactivateUser($subscription->user);
+
+        return true;
+    }
+
+    protected function handleChargeRefunded(Event $event): bool
+    {
+        $charge = $event->data->object;
+        $paymentIntent = $charge->payment_intent ?? null;
+
+        if (! is_string($paymentIntent) || $paymentIntent === '') {
+            return false;
+        }
+
+        $payment = Payment::query()
+            ->where('stripe_payment_intent', $paymentIntent)
+            ->first();
+
+        if ($payment === null) {
+            return false;
+        }
+
+        $amountRefunded = (int) ($charge->amount_refunded ?? 0);
+        $amountCaptured = (int) ($charge->amount_captured ?? $charge->amount ?? 0);
+        $fullyRefunded = (bool) ($charge->refunded ?? false) || ($amountCaptured > 0 && $amountRefunded >= $amountCaptured);
+
+        $metadata = array_merge($payment->metadata ?? [], [
+            'stripe_refund_reconciliation' => [
+                'stripe_event_id' => $event->id,
+                'stripe_charge_id' => (string) ($charge->id ?? ''),
+                'amount_refunded' => $amountRefunded,
+                'fully_refunded' => $fullyRefunded,
+                'reconciled_at' => now()->toIso8601String(),
+            ],
+        ]);
+
+        $attributes = ['metadata' => $metadata];
+
+        if ($fullyRefunded) {
+            $attributes['status'] = 'refunded';
+            $attributes['refunded_at'] = $payment->refunded_at ?? now();
+        }
+
+        $payment->forceFill($attributes)->save();
+
+        return true;
+    }
+
+    protected function handleAccountUpdated(Event $event): bool
+    {
+        $account = $event->data->object;
+        $accountId = $account->id ?? null;
+
+        if (! is_string($accountId) || $accountId === '') {
+            return false;
+        }
+
+        $organization = OrganizationProfile::query()
+            ->where('stripe_connect_account_id', $accountId)
+            ->first();
+
+        if ($organization === null) {
+            return false;
+        }
+
+        $organization->forceFill([
+            'payouts_enabled' => (bool) ($account->payouts_enabled ?? false),
+            'charges_enabled' => (bool) ($account->charges_enabled ?? false),
+            'metadata' => array_merge($organization->metadata ?? [], [
+                'stripe_connect' => [
+                    'stripe_event_id' => $event->id,
+                    'details_submitted' => (bool) ($account->details_submitted ?? false),
+                    'reconciled_at' => now()->toIso8601String(),
+                ],
+            ]),
+        ])->save();
 
         return true;
     }
@@ -249,6 +339,15 @@ class StripeWebhookService
             'unpaid' => 'unpaid',
             default => 'incomplete',
         };
+    }
+
+    protected function stripeSubscriptionFrom(mixed $subscription): object
+    {
+        if (is_object($subscription)) {
+            return $subscription;
+        }
+
+        return $this->client()->subscriptions->retrieve((string) $subscription, []);
     }
 
     protected function reserveEvent(Event $event, ?string $payloadHash): object

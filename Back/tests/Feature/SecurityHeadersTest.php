@@ -3,10 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\PlatformSetting;
+use App\Providers\AppServiceProvider;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Http\Middleware\TrustProxies;
+use Illuminate\Http\Request;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -49,6 +53,104 @@ class SecurityHeadersTest extends TestCase
                 ->assertOk()
                 ->assertHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         } finally {
+            app()->detectEnvironment(fn (): string => $previousEnvironment);
+        }
+    }
+
+    public function test_development_http_requests_are_not_forced_to_https(): void
+    {
+        URL::forceScheme(null);
+        config(['app.url' => 'http://localhost']);
+
+        $this->assertSame('http://localhost/api/v1/stripe/webhook', URL::to('/api/v1/stripe/webhook'));
+
+        $this->getJson('/api/v1/subscription/plans')
+            ->assertOk()
+            ->assertHeaderMissing('Strict-Transport-Security');
+    }
+
+    public function test_production_boot_forces_secure_url_generation(): void
+    {
+        $previousEnvironment = app()->environment();
+        $previousConfig = [
+            'app.debug' => config('app.debug'),
+            'app.url' => config('app.url'),
+            'services.stripe.fake_checkout' => config('services.stripe.fake_checkout'),
+            'session.secure' => config('session.secure'),
+            'session.encrypt' => config('session.encrypt'),
+        ];
+
+        try {
+            URL::forceScheme(null);
+            app()->detectEnvironment(fn (): string => 'production');
+            config([
+                'app.debug' => false,
+                'app.url' => 'http://api.narlit.com',
+                'services.stripe.fake_checkout' => false,
+                'session.secure' => true,
+                'session.encrypt' => true,
+            ]);
+
+            (new AppServiceProvider(app()))->boot();
+
+            $this->assertStringStartsWith('https://', URL::to('/api/v1/stripe/webhook'));
+            $this->assertStringEndsWith('/api/v1/stripe/webhook', URL::to('/api/v1/stripe/webhook'));
+        } finally {
+            URL::forceScheme(null);
+            app()->detectEnvironment(fn (): string => $previousEnvironment);
+            config($previousConfig);
+        }
+    }
+
+    public function test_untrusted_forwarded_proto_does_not_enable_hsts(): void
+    {
+        $previousEnvironment = app()->environment();
+
+        try {
+            TrustProxies::flushState();
+            app()->detectEnvironment(fn (): string => 'production');
+
+            $this->withServerVariables([
+                'REMOTE_ADDR' => '203.0.113.44',
+                'SERVER_PORT' => 80,
+                'HTTPS' => 'off',
+                'HTTP_X_FORWARDED_PROTO' => 'https',
+            ])
+                ->getJson('http://localhost/api/v1/subscription/plans')
+                ->assertOk()
+                ->assertHeaderMissing('Strict-Transport-Security');
+        } finally {
+            TrustProxies::flushState();
+            app()->detectEnvironment(fn (): string => $previousEnvironment);
+        }
+    }
+
+    public function test_trusted_proxy_forwarded_proto_enables_production_hsts(): void
+    {
+        $previousEnvironment = app()->environment();
+
+        try {
+            TrustProxies::at('127.0.0.1');
+            TrustProxies::withHeaders(
+                Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO
+                | Request::HEADER_X_FORWARDED_PREFIX
+            );
+            app()->detectEnvironment(fn (): string => 'production');
+
+            $this->withServerVariables([
+                'REMOTE_ADDR' => '127.0.0.1',
+                'SERVER_PORT' => 80,
+                'HTTPS' => 'off',
+                'HTTP_X_FORWARDED_PROTO' => 'https',
+            ])
+                ->getJson('http://localhost/api/v1/subscription/plans')
+                ->assertOk()
+                ->assertHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        } finally {
+            TrustProxies::flushState();
             app()->detectEnvironment(fn (): string => $previousEnvironment);
         }
     }
