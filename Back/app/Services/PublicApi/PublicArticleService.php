@@ -42,6 +42,29 @@ class PublicArticleService
         return ['article' => $data];
     }
 
+    /**
+     * Published articles for the landing page, featured ones first.
+     * Articles an admin has featured sort above the rest; within each band the
+     * most recently published wins.
+     */
+    public function featured(int $limit = 3): array
+    {
+        $limit = max(1, min($limit, 12));
+
+        $articles = Article::query()
+            ->with('organizationProfile')
+            ->where('status', 'published')
+            ->orderByRaw('CASE WHEN featured_at IS NULL THEN 1 ELSE 0 END')
+            ->orderByDesc('featured_at')
+            ->orderByDesc('published_at')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Article $article): array => $this->transform($article))
+            ->all();
+
+        return ['articles' => $articles];
+    }
+
     protected function transform(Article $article): array
     {
         $organization = $article->organizationProfile;

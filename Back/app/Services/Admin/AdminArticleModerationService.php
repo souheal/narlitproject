@@ -172,6 +172,74 @@ class AdminArticleModerationService
         }, 3);
     }
 
+    /**
+     * Editorial fix-ups by an admin. Only the content fields are touched — status,
+     * publishing and feature flags keep going through their own actions.
+     */
+    public function update(User $admin, string $publicId, array $values, Request $request): Article
+    {
+        $article = $this->findActiveArticle($publicId);
+
+        $editable = array_intersect_key($values, array_flip(['title', 'excerpt', 'content', 'category']));
+
+        if ($editable === []) {
+            throw new ApiException('No editable fields were provided.', 422);
+        }
+
+        return DB::transaction(function () use ($admin, $article, $editable, $values, $request): Article {
+            $changed = [];
+
+            foreach ($editable as $field => $value) {
+                if ($article->{$field} !== $value) {
+                    $changed[$field] = ['from' => $article->{$field}, 'to' => $value];
+                }
+            }
+
+            if ($changed === []) {
+                return $article;
+            }
+
+            $article->fill($editable);
+
+            if (array_key_exists('content', $editable)) {
+                $article->read_time = $article->estimatedReadTimeMinutes();
+            }
+
+            $article->save();
+
+            $this->log($admin, $article, 'article.updated', $request, [
+                // store which fields moved, not the full bodies, so the audit log stays readable
+                'fields' => array_keys($changed),
+                'edit_note' => $values['edit_note'] ?? null,
+            ]);
+
+            return $article->refresh();
+        }, 3);
+    }
+
+    /**
+     * Hard delete. `archive()` is the reversible option; this one is not.
+     */
+    public function destroy(User $admin, string $publicId, string $reason, Request $request): void
+    {
+        $article = Article::withTrashed()->where('public_id', $publicId)->first();
+
+        if ($article === null) {
+            throw new ApiException('Article was not found.', 404);
+        }
+
+        DB::transaction(function () use ($admin, $article, $reason, $request): void {
+            $this->log($admin, $article, 'article.deleted', $request, [
+                'reason' => $reason,
+                'title' => $article->title,
+                'status' => $article->status,
+                'organization_profile_id' => $article->organization_profile_id,
+            ]);
+
+            $article->forceDelete();
+        }, 3);
+    }
+
     public function restore(User $admin, string $publicId, Request $request): Article
     {
         $article = Article::withTrashed()->where('public_id', $publicId)->first();

@@ -29,7 +29,11 @@
       "Bash(grep -oE '\\(POST|GET|PUT|PATCH|DELETE\\)[\"\\\\`]?[ ]?[/a-zA-Z0-9_\\\\-{}\\\\$]+\" | sort | uniq)",
       "Bash(npx --no-install tsc --noEmit)",
       "Bash(php -l app/Http/Controllers/Api/Admin/AdminUserController.php app/Http/Controllers/Api/Admin/AdminAnalyticsController.php routes/api.php)",
-      "Bash(php -l app/Http/Controllers/Api/Admin/AdminAnalyticsController.php)"
+      "Bash(php -l app/Http/Controllers/Api/Admin/AdminAnalyticsController.php)",
+      "PowerShell($f='C:\\\\Users\\\\FIX 11\\\\Desktop\\\\narlitproject\\\\Front'; \"node_modules: \" + \\(Test-Path \"$f\\\\node_modules\"\\); \".env.local: \" + \\(Test-Path \"$f\\\\.env.local\"\\); $b='C:\\\\Users\\\\FIX 11\\\\Desktop\\\\narlitproject\\\\Back'; \"back vendor: \" + \\(Test-Path \"$b\\\\vendor\"\\); \"back .env: \" + \\(Test-Path \"$b\\\\.env\"\\); \"3000: \" + \\(\\(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue\\) -ne $null\\); \"8000: \" + \\(\\(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue\\) -ne $null\\))",
+      "PowerShell(Copy-Item *)",
+      "PowerShell($t=0; while\\($t -lt 60\\){ $a=\\(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue\\) -ne $null; $b=\\(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue\\) -ne $null; if\\($a -and $b\\){ \"both up after $t s\"; break }; Start-Sleep -Seconds 2; $t+=2 }; \"front:$a back:$b\")",
+      "PowerShell(Start-Process \"chrome.exe\" -ArgumentList \"http://localhost:3000\"; \"opened\")"
     ]
   }
 }

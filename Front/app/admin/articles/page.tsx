@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { adminFetch } from "@/lib/api";
 import { ConfirmDialog } from "@/app/admin/_components/ConfirmDialog";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { AdminPageFallback } from "@/app/admin/_components/AdminPageFallback";
 
 type Status = "pending_review" | "published" | "rejected" | "archived" | "draft";
 
@@ -66,7 +67,7 @@ interface AdminArticleDetail {
 
 const STATUS_TABS: Status[] = ["pending_review", "published", "rejected", "archived", "draft"];
 
-export default function AdminArticlesPage() {
+function AdminArticlesPageContent() {
   const searchParams = useSearchParams();
   const initialTab = useMemo<Status>(() => {
     const raw = searchParams?.get("status");
@@ -866,5 +867,13 @@ export default function AdminArticlesPage() {
         onCancel={() => setRestoreTarget(null)}
       />
     </div>
+  );
+}
+
+export default function AdminArticlesPage() {
+  return (
+    <Suspense fallback={<AdminPageFallback title="Articles" tabs={5} stats={0} />}>
+      <AdminArticlesPageContent />
+    </Suspense>
   );
 }

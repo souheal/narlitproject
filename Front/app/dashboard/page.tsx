@@ -5,6 +5,7 @@ import MemberNav from "@/components/MemberNav";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import ImpactScene from "@/components/ImpactScene";
 
 interface User {
   full_name: string;
@@ -165,7 +166,10 @@ export default function DashboardPage() {
       <main className="hm-main">
 
         {/* ── Welcome Banner ── */}
-        <section className="hm-welcome">
+        <section className="hm-welcome hm-welcome-hero">
+          <div className="hm-welcome-scene">
+            <ImpactScene />
+          </div>
           <div className="hm-welcome-inner">
             <div>
               <p className="hm-welcome-kicker">Welcome back</p>
