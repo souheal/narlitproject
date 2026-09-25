@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\PlatformSetting;
 use App\Models\User;
 use App\Services\Admin\PlatformSettingsService;
-use App\Services\Member\MemberSubscriptionService;
+use App\Services\Billing\PublicSubscriptionPlanService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -30,7 +30,7 @@ class MemberSubscriptionServiceTest extends TestCase
             $this->plan('monthly', 'Monthly', 'monthly', '7.00', 'price_monthly', true),
         ]);
 
-        $catalogue = app(MemberSubscriptionService::class)->planCatalogue();
+        $catalogue = app(PublicSubscriptionPlanService::class)->enabledPlans();
 
         $this->assertSame([
             [
@@ -39,7 +39,6 @@ class MemberSubscriptionServiceTest extends TestCase
                 'billing_interval' => 'monthly',
                 'display_price' => '7.00',
                 'stripe_price_id' => 'price_monthly',
-                'enabled' => true,
             ],
         ], $catalogue);
     }
@@ -51,7 +50,7 @@ class MemberSubscriptionServiceTest extends TestCase
             $this->plan('yearly', 'Yearly', 'yearly', '96.00', 'price_yearly', false),
         ]);
 
-        $catalogue = app(MemberSubscriptionService::class)->planCatalogue();
+        $catalogue = app(PublicSubscriptionPlanService::class)->enabledPlans();
 
         $this->assertCount(1, $catalogue);
         $this->assertSame('monthly', $catalogue[0]['key']);
@@ -66,7 +65,7 @@ class MemberSubscriptionServiceTest extends TestCase
             $this->plan('monthly', 'Monthly', 'monthly', '7.00', 'price_monthly', true),
         ]);
 
-        $this->assertSame('7.00', app(MemberSubscriptionService::class)->planCatalogue()[0]['display_price']);
+        $this->assertSame('7.00', app(PublicSubscriptionPlanService::class)->enabledPlans()[0]['display_price']);
 
         $settings->update('subscription_plans', [
             'plans' => [
@@ -75,7 +74,7 @@ class MemberSubscriptionServiceTest extends TestCase
             ],
         ], $admin, Request::create('/api/v1/admin/settings/subscription_plans', 'PUT'));
 
-        $catalogue = app(MemberSubscriptionService::class)->planCatalogue();
+        $catalogue = app(PublicSubscriptionPlanService::class)->enabledPlans();
 
         $this->assertCount(1, $catalogue);
         $this->assertSame('Monthly Plus', $catalogue[0]['name']);
@@ -94,7 +93,7 @@ class MemberSubscriptionServiceTest extends TestCase
             $this->plan('monthly', 'Monthly', 'monthly', '8.25', 'price_settings_monthly', true),
         ]);
 
-        $catalogue = app(MemberSubscriptionService::class)->planCatalogue();
+        $catalogue = app(PublicSubscriptionPlanService::class)->enabledPlans();
 
         $this->assertSame('8.25', $catalogue[0]['display_price']);
         $this->assertSame('price_settings_monthly', $catalogue[0]['stripe_price_id']);
@@ -110,7 +109,7 @@ class MemberSubscriptionServiceTest extends TestCase
             'is_public' => false,
         ]);
 
-        $this->assertSame([], app(MemberSubscriptionService::class)->planCatalogue());
+        $this->assertSame([], app(PublicSubscriptionPlanService::class)->enabledPlans());
 
         Cache::flush();
         PlatformSetting::query()->update([
@@ -121,7 +120,7 @@ class MemberSubscriptionServiceTest extends TestCase
             ]],
         ]);
 
-        $catalogue = app(MemberSubscriptionService::class)->planCatalogue();
+        $catalogue = app(PublicSubscriptionPlanService::class)->enabledPlans();
 
         $this->assertCount(1, $catalogue);
         $this->assertSame('bad_secret', $catalogue[0]['key']);
@@ -160,7 +159,7 @@ class MemberSubscriptionServiceTest extends TestCase
             ]),
         ]);
 
-        $catalogue = app(MemberSubscriptionService::class)->planCatalogue();
+        $catalogue = app(PublicSubscriptionPlanService::class)->enabledPlans();
         $encoded = json_encode($catalogue);
 
         $this->assertIsString($encoded);

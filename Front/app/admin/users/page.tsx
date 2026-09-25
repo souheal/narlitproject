@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { Suspense, useEffect, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { adminFetch } from "@/lib/api";
 import { ConfirmDialog } from "@/app/admin/_components/ConfirmDialog";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { AdminPageFallback } from "@/app/admin/_components/AdminPageFallback";
 
 interface AdminUser {
   public_id: string;
@@ -74,7 +75,7 @@ interface AdminUserDetail {
   admin_action_history: { action: string; admin_name: string; created_at: string }[];
 }
 
-export default function AdminUsersPage() {
+function AdminUsersPageContent() {
   const searchParams = useSearchParams();
   const openId = searchParams?.get("open") ?? null;
   const autoOpenedRef = useRef<string | null>(null);
@@ -548,5 +549,13 @@ export default function AdminUsersPage() {
         onCancel={() => setRevokeTarget(null)}
       />
     </div>
+  );
+}
+
+export default function AdminUsersPage() {
+  return (
+    <Suspense fallback={<AdminPageFallback title="Users" tabs={6} stats={0} />}>
+      <AdminUsersPageContent />
+    </Suspense>
   );
 }

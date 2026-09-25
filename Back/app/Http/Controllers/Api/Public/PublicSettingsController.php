@@ -16,7 +16,11 @@ class PublicSettingsController extends Controller
     ) {
     }
 
-    public function index(): JsonResponse
+    /**
+     * Exposes only the settings the marketing site needs. Every other group
+     * (payout, security, email, ...) stays behind the admin routes.
+     */
+    public function show(): JsonResponse
     {
         $impact = $this->settings->group('impact_split');
 

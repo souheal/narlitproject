@@ -1,5 +1,6 @@
 import PublicNav from "@/components/PublicNav";
 import PublicFooter from "@/components/PublicFooter";
+import { categoryIcon } from "@/lib/categories";
 
 const STEPS = [
   { icon: "💳", title: "Subscribe", body: "Choose monthly or yearly. Your subscription funds every nonprofit whose stories you read." },
@@ -50,17 +51,6 @@ interface FeaturedArticle {
   organization: { name: string | null };
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  Environment: "🌍",
-  "Food Security": "🍽️",
-  Education: "🎓",
-  Refugees: "🕊️",
-  Healthcare: "🏥",
-  Housing: "🏠",
-  "Civil Rights": "⚖️",
-  "Women & Children": "👨‍👩‍👧",
-};
-
 const FALLBACK_FEATURED: FeaturedArticle[] = [
   {
     public_id: "sample-1",
@@ -106,9 +96,9 @@ async function fetchPlans(): Promise<Plan[] | null> {
 }
 
 async function fetchFeaturedArticles(): Promise<FeaturedArticle[]> {
-  // Backend contract: GET /articles/featured?limit=3 (BE-16).
-  // Not yet implemented — falls back to curated sample content so the section
-  // still renders with real seeded titles until the endpoint is live.
+  // GET /articles/featured?limit=3 — admin-featured articles first, newest published
+  // after that. The sample content stays as a fallback for when the API is unreachable
+  // or no article has been published yet, so the section never renders empty.
   try {
     const res = await fetch(`${API_BASE_URL}/articles/featured?limit=3`, {
       next: { revalidate: 300 },
@@ -126,8 +116,8 @@ async function fetchFeaturedArticles(): Promise<FeaturedArticle[]> {
 }
 
 async function fetchImpactSplit(): Promise<ImpactSplit> {
-  // Backend contract: GET /settings/public returns { data: { impact_split: {...} } }.
-  // Endpoint not yet built (BE-15). Falls back to defaults so the page still renders.
+  // GET /settings/public returns { data: { impact_split: {...} } } from the platform
+  // settings. Defaults are kept as a fallback for when the API is unreachable.
   try {
     const res = await fetch(`${API_BASE_URL}/settings/public`, {
       next: { revalidate: 300 },
@@ -263,7 +253,7 @@ export default async function HomePage() {
                   >
                     <div className="hm-featured-card-top">
                       <span className="hm-featured-category">
-                        {a.category ? `${CATEGORY_ICONS[a.category] ?? "📰"} ${a.category}` : "📰 Story"}
+                        {a.category ? `${categoryIcon(a.category)} ${a.category}` : "📰 Story"}
                       </span>
                       <span className="hm-featured-org">
                         {a.organization?.name ?? "NarLit"}

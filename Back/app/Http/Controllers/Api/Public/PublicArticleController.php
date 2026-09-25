@@ -17,6 +17,16 @@ class PublicArticleController extends Controller
     ) {
     }
 
+    public function featured(Request $request): JsonResponse
+    {
+        $limit = (int) $request->query('limit', 3);
+
+        return $this->success(
+            'Featured articles retrieved.',
+            $this->articles->featured($limit),
+        );
+    }
+
     public function show(Request $request, string $publicId): JsonResponse
     {
         return $this->success(

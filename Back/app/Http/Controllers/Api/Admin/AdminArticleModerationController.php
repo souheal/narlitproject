@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdminArticleActionRequest;
-use App\Http\Requests\Admin\AdminArticleDeleteRequest;
 use App\Http\Requests\Admin\AdminArticleIndexRequest;
-use App\Http\Requests\Admin\AdminArticleUpdateRequest;
+use App\Http\Requests\Admin\DeleteArticleRequest;
 use App\Http\Requests\Admin\ModerateArticleRequest;
+use App\Http\Requests\Admin\UpdateArticleRequest;
 use App\Http\Resources\Admin\AdminArticleDetailResource;
 use App\Http\Resources\Admin\AdminArticleResource;
 use App\Services\Admin\AdminArticleModerationService;
@@ -72,7 +72,7 @@ class AdminArticleModerationController extends Controller
         return $this->articleResponse('Article restored successfully.', $articles->restore($request->user(), $publicId, $request));
     }
 
-    public function update(string $publicId, AdminArticleUpdateRequest $request, AdminArticleModerationService $articles): JsonResponse
+    public function update(string $publicId, UpdateArticleRequest $request, AdminArticleModerationService $articles): JsonResponse
     {
         $article = $articles->update($request->user(), $publicId, $request->validated(), $request);
 
@@ -81,7 +81,7 @@ class AdminArticleModerationController extends Controller
         ]);
     }
 
-    public function destroy(string $publicId, AdminArticleDeleteRequest $request, AdminArticleModerationService $articles): JsonResponse
+    public function destroy(string $publicId, DeleteArticleRequest $request, AdminArticleModerationService $articles): JsonResponse
     {
         $articles->destroy($request->user(), $publicId, (string) $request->validated('reason'), $request);
 

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { adminFetch } from "@/lib/api";
 import { ConfirmDialog } from "@/app/admin/_components/ConfirmDialog";
 import { PromptDialog } from "@/app/admin/_components/PromptDialog";
 import { safeHref, EXTERNAL_LINK_REL } from "@/lib/safeUrl";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { AdminPageFallback } from "@/app/admin/_components/AdminPageFallback";
 
 type Status = "active" | "canceled" | "past_due" | "unpaid" | "incomplete" | "all";
 
@@ -80,7 +81,7 @@ function planIcon(plan: string): string {
   return "💠";
 }
 
-export default function AdminSubscriptionsPage() {
+function AdminSubscriptionsPageContent() {
   const searchParams = useSearchParams();
   const initialTab = useMemo<Status>(() => {
     const raw = searchParams?.get("status");
@@ -704,5 +705,13 @@ export default function AdminSubscriptionsPage() {
         onCancel={() => setRefundPaymentTarget(null)}
       />
     </div>
+  );
+}
+
+export default function AdminSubscriptionsPage() {
+  return (
+    <Suspense fallback={<AdminPageFallback title="Subscriptions" tabs={0} stats={0} />}>
+      <AdminSubscriptionsPageContent />
+    </Suspense>
   );
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { adminFetch } from "@/lib/api";
 import { ConfirmDialog } from "@/app/admin/_components/ConfirmDialog";
 import { PromptDialog } from "@/app/admin/_components/PromptDialog";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { AdminPageFallback } from "@/app/admin/_components/AdminPageFallback";
 
 interface Batch {
   public_id: string;
@@ -66,7 +67,7 @@ interface AdminActionLog {
   created_at: string;
 }
 
-export default function AdminPayoutsPage() {
+function AdminPayoutsPageContent() {
   const searchParams = useSearchParams();
   const openId = searchParams?.get("open") ?? null;
   const autoOpenedRef = useRef<string | null>(null);
@@ -566,5 +567,13 @@ export default function AdminPayoutsPage() {
         onCancel={() => setCancelBatchTarget(null)}
       />
     </div>
+  );
+}
+
+export default function AdminPayoutsPage() {
+  return (
+    <Suspense fallback={<AdminPageFallback title="Payouts" tabs={0} stats={4} />}>
+      <AdminPayoutsPageContent />
+    </Suspense>
   );
 }

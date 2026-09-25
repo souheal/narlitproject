@@ -12,6 +12,11 @@ use Illuminate\Support\Facades\Storage;
 
 class PublicArticleService
 {
+    /**
+     * Published articles for the landing page, featured ones first.
+     * Articles an admin has featured sort above the rest; within each band the
+     * most recently published wins.
+     */
     public function featured(int $limit = 3): array
     {
         $limit = max(1, min($limit, 12));
@@ -19,14 +24,15 @@ class PublicArticleService
         $articles = Article::query()
             ->with('organizationProfile')
             ->where('status', 'published')
-            ->whereNotNull('featured_at')
+            ->orderByRaw('CASE WHEN featured_at IS NULL THEN 1 ELSE 0 END')
             ->orderByDesc('featured_at')
+            ->orderByDesc('published_at')
             ->limit($limit)
-            ->get();
+            ->get()
+            ->map(fn (Article $article): array => $this->transform($article))
+            ->all();
 
-        return [
-            'articles' => $articles->map(fn (Article $article): array => $this->transform($article))->all(),
-        ];
+        return ['articles' => $articles];
     }
 
     public function show(string $publicId, ?User $user = null): array

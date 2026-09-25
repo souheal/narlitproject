@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { adminFetch } from "@/lib/api";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
+import { AdminPageFallback } from "@/app/admin/_components/AdminPageFallback";
 
 type Status = "pending" | "approved" | "rejected";
 
@@ -19,7 +20,7 @@ interface Org {
   rejection_reason: string | null;
 }
 
-export default function AdminOrganizationsPage() {
+function AdminOrganizationsPageContent() {
   const searchParams = useSearchParams();
   const initialTab = useMemo<Status>(() => {
     const raw = searchParams?.get("status");
@@ -251,5 +252,13 @@ export default function AdminOrganizationsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminOrganizationsPage() {
+  return (
+    <Suspense fallback={<AdminPageFallback title="Organizations" tabs={3} stats={0} />}>
+      <AdminOrganizationsPageContent />
+    </Suspense>
   );
 }

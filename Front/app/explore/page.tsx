@@ -6,6 +6,9 @@ import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
+import { categoryIcon } from "@/lib/categories";
+import CardRail from "@/components/CardRail";
+import DiscoverScene from "@/components/DiscoverScene";
 
 interface Article {
   public_id: string;
@@ -20,7 +23,8 @@ interface Article {
 
 interface CategorySection {
   category: string;
-  icon: string;
+  /** The API sends null here; the icon is resolved client-side. */
+  icon: string | null;
   articles: Article[];
 }
 
@@ -62,18 +66,9 @@ function HorizontalRow({ title, articles, seeAllHref }: { title: string; article
         <h2 className="hm-section-title">{title}</h2>
         {seeAllHref && <a href={seeAllHref} className="hm-see-all">See all →</a>}
       </div>
-      <div
-        style={{
-          display: "grid",
-          gridAutoColumns: "minmax(280px, 320px)",
-          gridAutoFlow: "column",
-          gap: 14,
-          overflowX: "auto",
-          padding: "4px 0 12px",
-        }}
-      >
+      <CardRail label={title}>
         {articles.map((a) => <ArticleCard key={a.public_id} a={a} />)}
-      </div>
+      </CardRail>
     </section>
   );
 }
@@ -84,18 +79,7 @@ function SkeletonRow({ title }: { title: string }) {
       <div className="hm-section-header">
         <h2 className="hm-section-title">{title}</h2>
       </div>
-      <div
-        style={{
-          display: "grid",
-          gridAutoColumns: "minmax(280px, 320px)",
-          gridAutoFlow: "column",
-          gap: 14,
-          overflowX: "auto",
-          padding: "4px 0 12px",
-        }}
-        aria-busy="true"
-        aria-label={`Loading ${title}`}
-      >
+      <CardRail label={`Loading ${title}`} busy>
         {Array.from({ length: 4 }).map((_, i) => (
           <article key={i} className="hm-article-card">
             <div className="hm-article-top">
@@ -114,7 +98,7 @@ function SkeletonRow({ title }: { title: string }) {
             </div>
           </article>
         ))}
-      </div>
+      </CardRail>
     </section>
   );
 }
@@ -189,13 +173,16 @@ export default function ExplorePage() {
 
         {!loading && hero && (
           <section
-            className="hm-welcome"
+            className="hm-welcome hm-welcome-hero"
             style={{
               background: "linear-gradient(135deg, rgba(255,138,71,0.25), rgba(17,182,200,0.25))",
               cursor: "pointer",
             }}
             onClick={() => (window.location.href = `/articles/${hero.public_id}`)}
           >
+            <div className="hm-welcome-scene">
+              <DiscoverScene />
+            </div>
             <div className="hm-welcome-inner">
               <div>
                 <p className="hm-welcome-kicker">⭐ Featured story</p>
@@ -208,7 +195,6 @@ export default function ExplorePage() {
               <a
                 href={`/articles/${hero.public_id}`}
                 className="hm-article-btn"
-                style={{ alignSelf: "center" }}
                 onClick={(e) => e.stopPropagation()}
               >
                 {hero.cta_label} →
@@ -226,7 +212,7 @@ export default function ExplorePage() {
             {(data?.by_category ?? []).map((sec) => (
               <HorizontalRow
                 key={sec.category}
-                title={`${sec.icon} ${sec.category}`}
+                title={`${sec.icon ?? categoryIcon(sec.category)} ${sec.category}`}
                 articles={sec.articles}
                 seeAllHref={`/articles?category=${encodeURIComponent(sec.category)}`}
               />

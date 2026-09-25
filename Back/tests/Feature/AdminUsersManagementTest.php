@@ -183,9 +183,7 @@ class AdminUsersManagementTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson("/api/v1/admin/users/{$subscriber->public_id}/status", [
-            'is_active' => false,
-        ])
+        $this->postJson("/api/v1/admin/users/{$subscriber->public_id}/suspend")
             ->assertOk()
             ->assertJsonPath('data.user.account_status', 'suspended');
 
@@ -197,9 +195,9 @@ class AdminUsersManagementTest extends TestCase
             'entity_id' => $subscriber->public_id,
         ]);
 
-        $this->patchJson("/api/v1/admin/users/{$subscriber->public_id}/status", [
-            'is_active' => true,
-        ])->assertOk();
+        $this->postJson("/api/v1/admin/users/{$subscriber->public_id}/activate")
+            ->assertOk()
+            ->assertJsonPath('data.user.account_status', 'active');
 
         $this->postJson("/api/v1/admin/users/{$subscriber->public_id}/send-password-reset")
             ->assertOk()
@@ -224,9 +222,7 @@ class AdminUsersManagementTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson("/api/v1/admin/users/{$admin->public_id}/status", [
-            'is_active' => false,
-        ])
+        $this->postJson("/api/v1/admin/users/{$admin->public_id}/suspend")
             ->assertStatus(422)
             ->assertJsonPath('message', 'You cannot suspend your own active admin session.');
 

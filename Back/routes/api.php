@@ -79,12 +79,15 @@ Route::prefix('v1')->group(function () {
     Route::post('/contact', [ContactController::class, 'store']);
     Route::get('/subscription/plans', [SubscriptionPlanController::class, 'index']);
 
+    Route::get('/settings/public', [PublicSettingsController::class, 'show']);
+
+    // `/articles/featured` must stay above `/articles/{publicId}`, otherwise the
+    // wildcard swallows it and "featured" is treated as a public id.
     Route::get('/articles/featured', [PublicArticleController::class, 'featured']);
     Route::get('/articles/{publicId}', [PublicArticleController::class, 'show']);
     Route::get('/organizations', [PublicOrganizationController::class, 'index']);
     Route::get('/organizations/{publicId}', [PublicOrganizationController::class, 'show']);
     Route::get('/search', [PublicSearchController::class, 'index']);
-    Route::get('/settings/public', [PublicSettingsController::class, 'index']);
 
     Route::middleware(['auth:sanctum', 'narlit.user.access'])->prefix('member')->group(function () {
         Route::get('/dashboard', [MemberDashboardController::class, 'show']);
@@ -140,6 +143,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'show']);
         Route::get('/overview', [AdminDashboardController::class, 'overview']);
         Route::get('/analytics', [AdminAnalyticsController::class, 'combined']);
+        Route::get('/analytics/overview', [AdminAnalyticsController::class, 'overview']);
+        Route::get('/analytics/timeseries', [AdminAnalyticsController::class, 'timeseries']);
+        Route::get('/analytics/top-organizations', [AdminAnalyticsController::class, 'topOrganizations']);
+        Route::get('/analytics/top-articles', [AdminAnalyticsController::class, 'topArticles']);
+        Route::get('/analytics/categories', [AdminAnalyticsController::class, 'categories']);
+        Route::get('/analytics/funnel', [AdminAnalyticsController::class, 'funnel']);
+        Route::get('/analytics/cohorts', [AdminAnalyticsController::class, 'cohorts']);
         Route::get('/audit', [AdminAuditLogController::class, 'index']);
         Route::get('/audit-logs/export', [AdminAuditLogController::class, 'export'])->middleware('throttle:admin.audit.export');
         Route::get('/audit-logs', [AdminAuditLogController::class, 'index']);
@@ -149,6 +159,8 @@ Route::prefix('v1')->group(function () {
         Route::put('/settings/{group}', [AdminPlatformSettingsController::class, 'update'])->middleware('throttle:admin.sensitive');
         Route::get('/articles', [AdminArticleModerationController::class, 'index']);
         Route::get('/articles/{publicId}', [AdminArticleModerationController::class, 'show']);
+        Route::patch('/articles/{publicId}', [AdminArticleModerationController::class, 'update']);
+        Route::delete('/articles/{publicId}', [AdminArticleModerationController::class, 'destroy'])->middleware('throttle:admin.sensitive');
         Route::post('/articles/{publicId}/approve', [AdminArticleModerationController::class, 'approve']);
         Route::post('/articles/{publicId}/reject', [AdminArticleModerationController::class, 'reject']);
         Route::post('/articles/{publicId}/request-changes', [AdminArticleModerationController::class, 'requestChanges']);
@@ -173,6 +185,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/payouts/{publicId}/items', [AdminPayoutController::class, 'items']);
         Route::post('/payouts/{publicId}/execute', [AdminPayoutController::class, 'execute'])->middleware('throttle:admin.sensitive');
         Route::post('/payout-items/{id}/retry', [AdminPayoutController::class, 'retryItem'])->middleware('throttle:admin.sensitive');
+        // alias kept for the admin UI, which posts to /payouts/items/{id}/retry
         Route::post('/payouts/items/{id}/retry', [AdminPayoutController::class, 'retryItem'])->middleware('throttle:admin.sensitive');
         Route::post('/payouts/{publicId}/cancel', [AdminPayoutController::class, 'cancel'])->middleware('throttle:admin.sensitive');
         Route::get('/users', [AdminUserController::class, 'index']);

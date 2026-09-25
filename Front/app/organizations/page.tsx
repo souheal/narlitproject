@@ -8,17 +8,18 @@ import { safeImageSrc } from "@/lib/safeUrl";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
 
+/** Mirrors PublicOrganizationService::summary() exactly. The page used to
+ *  declare a different shape entirely (organization_name, mission_statement,
+ *  total_articles, city, category, …), none of which the API sends. */
 interface OrgCard {
   public_id: string;
-  organization_name: string;
-  mission_statement: string | null;
-  category: string | null;
-  city: string | null;
-  country: string | null;
+  name: string | null;
+  verification_status: string;
+  website: string | null;
   logo_url: string | null;
-  total_articles: number;
-  total_supporters: number;
-  is_supported_by_me: boolean;
+  published_articles_count: number;
+  total_reads: number;
+  description: string | null;
 }
 
 interface User { full_name: string; email: string }
@@ -105,6 +106,9 @@ export default function OrganizationsPage() {
             <button type="submit" className="hm-article-btn">Search</button>
           </form>
 
+          {/* The API does not send a category list today, which left a lone
+              "All" button filtering nothing. Shown only if one ever arrives. */}
+          {categories.length > 0 && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
             <button
               className={`admin-tab ${selectedCat === "all" ? "admin-tab-active" : ""}`}
@@ -122,6 +126,7 @@ export default function OrganizationsPage() {
               </button>
             ))}
           </div>
+          )}
 
           {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
 
@@ -175,18 +180,18 @@ export default function OrganizationsPage() {
                         color: "white", fontWeight: 800,
                       }}
                     >
-                      {o.organization_name.slice(0, 2).toUpperCase()}
+                      {(o.name ?? "?").slice(0, 2).toUpperCase()}
                     </div>
                   )}
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>{o.organization_name}</h3>
-                    {(o.city || o.country) && (
-                      <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "var(--muted)" }}>
-                        📍 {[o.city, o.country].filter(Boolean).join(", ")}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>{o.name ?? "Unnamed nonprofit"}</h3>
+                    {o.website && (
+                      <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        🔗 {o.website.replace(/^https?:\/\//, "")}
                       </p>
                     )}
                   </div>
-                  {o.is_supported_by_me && (
+                  {o.verification_status === "approved" && (
                     <span
                       style={{
                         background: "rgba(17,182,200,0.15)",
@@ -195,38 +200,23 @@ export default function OrganizationsPage() {
                         fontWeight: 700,
                         padding: "3px 8px",
                         borderRadius: 999,
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      Supported
+                      Verified
                     </span>
                   )}
                 </div>
 
-                {o.category && (
-                  <span
-                    style={{
-                      display: "inline-block",
-                      fontSize: "0.7rem",
-                      padding: "3px 10px",
-                      borderRadius: 999,
-                      background: "rgba(255,138,71,0.1)",
-                      color: "var(--orange)",
-                      marginBottom: 10,
-                    }}
-                  >
-                    {o.category}
-                  </span>
-                )}
-
-                {o.mission_statement && (
+                {o.description && (
                   <p style={{ fontSize: "0.85rem", color: "var(--muted)", margin: "0 0 12px", lineHeight: 1.5 }}>
-                    {o.mission_statement.length > 140 ? `${o.mission_statement.slice(0, 140)}…` : o.mission_statement}
+                    {o.description.length > 140 ? `${o.description.slice(0, 140)}…` : o.description}
                   </p>
                 )}
 
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--muted)", paddingTop: 12, borderTop: "1px solid var(--line)" }}>
-                  <span>📖 {o.total_articles} stories</span>
-                  <span>❤️ {o.total_supporters} supporters</span>
+                  <span>📖 {o.published_articles_count} stories</span>
+                  <span>👁️ {o.total_reads.toLocaleString()} reads</span>
                 </div>
               </a>
             ))}

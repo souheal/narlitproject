@@ -23,7 +23,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ImportIrsExemptOrganizations::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->statefulApi();
+        // The SPA authenticates with Sanctum bearer tokens, not cookie sessions.
+        // Enabling stateful API mode would apply CSRF validation to requests coming
+        // from the frontend origin and reject every login with a 419.
         $middleware->throttleApi('api');
         $middleware->alias([
             'narlit.admin' => EnsureAdminAccess::class,

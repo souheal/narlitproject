@@ -189,9 +189,9 @@ class AdminPayoutManagementTest extends TestCase
 
         $this->getJson('/api/v1/admin/payouts/summary')
             ->assertOk()
-            ->assertJsonPath('data.pending_payout_amount', '10.00')
-            ->assertJsonPath('data.organizations_awaiting_payout', 1)
-            ->assertJsonPath('data.organizations_missing_stripe_connect_setup', 1);
+            ->assertJsonPath('data.summary.pending_payout_amount', '10.00')
+            ->assertJsonPath('data.summary.organizations_awaiting_payout', 1)
+            ->assertJsonPath('data.summary.organizations_missing_stripe_connect_setup', 1);
 
         $this->getJson('/api/v1/admin/payouts?month=2026-07&status=pending&organization='.$org->public_id.'&transfer_status=pending')
             ->assertOk()

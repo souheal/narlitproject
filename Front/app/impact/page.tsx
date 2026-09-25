@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import MemberNav from "@/components/MemberNav";
+import GrowthScene from "@/components/GrowthScene";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
@@ -110,7 +111,10 @@ export default function ImpactPage() {
       <main className="hm-main">
         {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
 
-        <section className="hm-welcome">
+        <section className="hm-welcome hm-welcome-hero">
+          <div className="hm-welcome-scene">
+            <GrowthScene />
+          </div>
           <div className="hm-welcome-inner">
             <div>
               <p className="hm-welcome-kicker">Your journey</p>
@@ -122,7 +126,7 @@ export default function ImpactPage() {
                 Across {totals?.organizations_supported ?? 0} nonprofits, through {totals?.articles_read ?? 0} completed reads.
               </p>
             </div>
-            <a href="/impact/share" className="hm-article-btn" style={{ alignSelf: "center" }}>
+            <a href="/impact/share" className="hm-article-btn">
               Share my impact →
             </a>
           </div>
