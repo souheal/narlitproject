@@ -5,11 +5,30 @@ namespace App\Services\PublicApi;
 use App\Exceptions\ApiException;
 use App\Models\Article;
 use App\Models\ArticleRead;
+use App\Models\Bookmark;
+use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 
 class PublicArticleService
 {
+    public function featured(int $limit = 3): array
+    {
+        $limit = max(1, min($limit, 12));
+
+        $articles = Article::query()
+            ->with('organizationProfile')
+            ->where('status', 'published')
+            ->whereNotNull('featured_at')
+            ->orderByDesc('featured_at')
+            ->limit($limit)
+            ->get();
+
+        return [
+            'articles' => $articles->map(fn (Article $article): array => $this->transform($article))->all(),
+        ];
+    }
+
     public function show(string $publicId, ?User $user = null): array
     {
         $article = Article::query()
@@ -31,15 +50,82 @@ class PublicArticleService
         }
 
         $data = $this->transform($article);
-
-        if ($user !== null) {
-            $data['is_read'] = ArticleRead::query()
-                ->where('user_id', $user->id)
-                ->where('article_id', $article->id)
-                ->exists();
-        }
+        $data['body'] = $article->content;
+        $data['requires_subscription'] = true;
+        $data['has_access'] = $isOwner || $this->hasActiveSubscription($user);
+        $data['is_read'] = $user !== null && ArticleRead::query()
+            ->where('user_id', $user->id)
+            ->where('article_id', $article->id)
+            ->exists();
+        $data['is_bookmarked'] = $user !== null && Bookmark::query()
+            ->where('user_id', $user->id)
+            ->where('article_id', $article->id)
+            ->exists();
+        $data['related'] = $this->relatedArticles($article, $user);
 
         return ['article' => $data];
+    }
+
+    protected function hasActiveSubscription(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        return Subscription::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'active')
+            ->where(function ($query): void {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->whereNull('canceled_at')
+            ->exists();
+    }
+
+    protected function relatedArticles(Article $article, ?User $user): array
+    {
+        $related = Article::query()
+            ->with('organizationProfile')
+            ->where('id', '!=', $article->id)
+            ->where('status', 'published')
+            ->where(function ($query) use ($article): void {
+                $query->where('organization_profile_id', $article->organization_profile_id);
+                if ($article->category !== null) {
+                    $query->orWhere('category', $article->category);
+                }
+            })
+            ->orderByDesc('published_at')
+            ->limit(3)
+            ->get();
+
+        if ($related->isEmpty()) {
+            return [];
+        }
+
+        $readIds = $user === null
+            ? collect()
+            : ArticleRead::query()
+                ->where('user_id', $user->id)
+                ->whereIn('article_id', $related->pluck('id'))
+                ->pluck('article_id')
+                ->all();
+
+        return $related->map(function (Article $item) use ($readIds): array {
+            $organization = $item->organizationProfile;
+
+            return [
+                'public_id' => $item->public_id,
+                'title' => $item->title,
+                'excerpt' => $item->excerpt,
+                'category' => $item->category,
+                'organization' => [
+                    'public_id' => $organization?->public_id,
+                    'name' => $organization?->organization_name,
+                ],
+                'read_time_minutes' => $item->read_time,
+                'is_read' => in_array($item->id, is_array($readIds) ? $readIds : $readIds->all(), true),
+            ];
+        })->all();
     }
 
     protected function transform(Article $article): array

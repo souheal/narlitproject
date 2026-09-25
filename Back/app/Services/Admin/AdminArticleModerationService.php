@@ -195,6 +195,71 @@ class AdminArticleModerationService
         }, 3);
     }
 
+    public function update(User $admin, string $publicId, array $data, Request $request): Article
+    {
+        $article = $this->findActiveArticle($publicId);
+
+        return DB::transaction(function () use ($admin, $article, $data, $request): Article {
+            $changed = [];
+            $update = [];
+
+            foreach (['title', 'excerpt', 'content', 'category'] as $field) {
+                if (! array_key_exists($field, $data)) {
+                    continue;
+                }
+
+                $newValue = $data[$field];
+                $oldValue = $article->{$field};
+
+                if ($newValue === $oldValue) {
+                    continue;
+                }
+
+                $update[$field] = $newValue;
+                $changed[$field] = [
+                    'from' => is_string($oldValue) && strlen($oldValue) > 200
+                        ? substr($oldValue, 0, 200).'…'
+                        : $oldValue,
+                    'to' => is_string($newValue) && strlen($newValue) > 200
+                        ? substr($newValue, 0, 200).'…'
+                        : $newValue,
+                ];
+            }
+
+            if ($update !== []) {
+                $article->forceFill($update)->save();
+            }
+
+            $this->log($admin, $article, 'article.edited', $request, [
+                'changed_fields' => array_keys($changed),
+                'changes' => $changed,
+                'edit_note' => $data['edit_note'] ?? null,
+            ]);
+
+            return $article->refresh();
+        }, 3);
+    }
+
+    public function destroy(User $admin, string $publicId, string $reason, Request $request): void
+    {
+        $article = Article::withTrashed()->where('public_id', $publicId)->first();
+
+        if ($article === null) {
+            throw new ApiException('Article was not found.', 404);
+        }
+
+        DB::transaction(function () use ($admin, $article, $reason, $request): void {
+            $this->log($admin, $article, 'article.deleted', $request, [
+                'reason' => $reason,
+                'title' => $article->title,
+                'status_before_delete' => $article->status,
+                'was_archived' => $article->trashed(),
+            ]);
+
+            $article->forceDelete();
+        }, 3);
+    }
+
     protected function publishArticle(User $admin, Article $article, string $action, Request $request): Article
     {
         return DB::transaction(function () use ($admin, $article, $action, $request): Article {

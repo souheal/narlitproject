@@ -24,7 +24,7 @@ class MemberSubscriptionController extends Controller
     public function changePlan(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'plan' => ['required', 'string', 'in:monthly,yearly'],
+            'plan' => ['required', 'string', 'max:120'],
         ]);
 
         return $this->success('Plan updated.', $this->service->changePlan($request->user(), $data['plan']));

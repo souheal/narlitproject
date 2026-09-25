@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdminArticleActionRequest;
+use App\Http\Requests\Admin\AdminArticleDeleteRequest;
 use App\Http\Requests\Admin\AdminArticleIndexRequest;
+use App\Http\Requests\Admin\AdminArticleUpdateRequest;
 use App\Http\Requests\Admin\ModerateArticleRequest;
 use App\Http\Resources\Admin\AdminArticleDetailResource;
 use App\Http\Resources\Admin\AdminArticleResource;
@@ -68,6 +70,24 @@ class AdminArticleModerationController extends Controller
     public function restore(string $publicId, AdminArticleActionRequest $request, AdminArticleModerationService $articles): JsonResponse
     {
         return $this->articleResponse('Article restored successfully.', $articles->restore($request->user(), $publicId, $request));
+    }
+
+    public function update(string $publicId, AdminArticleUpdateRequest $request, AdminArticleModerationService $articles): JsonResponse
+    {
+        $article = $articles->update($request->user(), $publicId, $request->validated(), $request);
+
+        return $this->success('Article updated successfully.', [
+            'article' => new AdminArticleDetailResource($articles->details($article->public_id)),
+        ]);
+    }
+
+    public function destroy(string $publicId, AdminArticleDeleteRequest $request, AdminArticleModerationService $articles): JsonResponse
+    {
+        $articles->destroy($request->user(), $publicId, (string) $request->validated('reason'), $request);
+
+        return $this->success('Article deleted permanently.', [
+            'deleted_public_id' => $publicId,
+        ]);
     }
 
     protected function articleResponse(string $message, object $article): JsonResponse

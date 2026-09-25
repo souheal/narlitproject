@@ -2,31 +2,37 @@
 
 namespace App\Services\Member;
 
-<<<<<<< HEAD
 use App\Exceptions\ApiException;
 use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Admin\PlatformSettingsService;
 
 class MemberSubscriptionService
 {
+    public function __construct(
+        protected PlatformSettingsService $settings,
+    ) {}
+
     public function show(User $user): array
     {
         $subscription = $this->latest($user);
         $currency = $subscription?->currency ?? (string) config('services.stripe.currency', 'USD');
         $currentPlan = $subscription?->plan;
-        $plans = $this->planCatalogue($currentPlan, $currency);
 
         return [
             'subscription' => $this->present($subscription),
-            'plans' => $plans,
+            'plans' => $this->planCatalogueForMember($currentPlan, $currency),
             'invoices' => $this->invoices($user),
         ];
     }
 
     public function changePlan(User $user, string $plan): array
     {
-        if (! in_array($plan, ['monthly', 'yearly'], true)) {
+        $catalogue = $this->planCatalogue();
+        $target = collect($catalogue)->firstWhere('key', $plan);
+
+        if ($target === null) {
             throw new ApiException('Choose a valid plan.', 422);
         }
 
@@ -35,18 +41,15 @@ class MemberSubscriptionService
             throw new ApiException('You do not have an active subscription to change.', 404);
         }
 
-        $catalog = $this->planCatalogue($subscription->plan, $subscription->currency);
-        $target = collect($catalog)->firstWhere('key', $plan);
-
         $subscription->plan = $plan;
-        $subscription->amount = (float) ($target['amount'] ?? $subscription->amount);
+        $subscription->amount = (float) $target['display_price'];
         $subscription->status = 'active';
         $subscription->canceled_at = null;
         $subscription->save();
 
         return array_merge(
             ['subscription' => $this->present($subscription->refresh())],
-            ['plans' => $this->planCatalogue($subscription->plan, $subscription->currency)],
+            ['plans' => $this->planCatalogueForMember($subscription->plan, $subscription->currency)],
         );
     }
 
@@ -96,6 +99,62 @@ class MemberSubscriptionService
         return [
             'checkout_url' => $portalUrl,
             'portal_url' => $portalUrl,
+        ];
+    }
+
+    public function planCatalogue(): array
+    {
+        $settings = $this->settings->group('subscription_plans');
+        $plans = $settings['plans'] ?? [];
+
+        if (! is_array($plans)) {
+            return [];
+        }
+
+        return collect($plans)
+            ->filter(fn (mixed $plan): bool => is_array($plan) && ($plan['enabled'] ?? false) === true)
+            ->map(fn (array $plan): array => $this->normalisePlan($plan))
+            ->filter(fn (array $plan): bool => $plan !== [])
+            ->values()
+            ->all();
+    }
+
+    protected function planCatalogueForMember(?string $currentPlan, string $currency): array
+    {
+        return collect($this->planCatalogue())
+            ->map(function (array $plan) use ($currentPlan, $currency): array {
+                $plan['currency'] = $currency;
+                $plan['is_current'] = $plan['key'] === $currentPlan;
+                $plan['amount'] = $plan['display_price'];
+                $plan['price'] = $plan['display_price'];
+                $plan['interval'] = $plan['billing_interval'];
+
+                return $plan;
+            })
+            ->all();
+    }
+
+    protected function normalisePlan(array $plan): array
+    {
+        foreach (['key', 'name', 'billing_interval', 'display_price'] as $field) {
+            if (! array_key_exists($field, $plan) || ! is_scalar($plan[$field])) {
+                return [];
+            }
+        }
+
+        $stripePriceId = $plan['stripe_price_id'] ?? null;
+
+        if ($stripePriceId !== null && ! is_scalar($stripePriceId)) {
+            return [];
+        }
+
+        return [
+            'key' => (string) $plan['key'],
+            'name' => (string) $plan['name'],
+            'billing_interval' => (string) $plan['billing_interval'],
+            'display_price' => (string) $plan['display_price'],
+            'stripe_price_id' => $stripePriceId === null ? null : (string) $stripePriceId,
+            'enabled' => true,
         ];
     }
 
@@ -164,44 +223,6 @@ class MemberSubscriptionService
         ];
     }
 
-    protected function planCatalogue(?string $currentPlan, string $currency): array
-    {
-        $monthlyAmount = (float) config('services.stripe.monthly_price', 12.00);
-        $yearlyAmount = (float) config('services.stripe.yearly_price', 120.00);
-
-        return [
-            [
-                'key' => 'monthly',
-                'name' => 'Monthly',
-                'amount' => number_format($monthlyAmount, 2, '.', ''),
-                'price' => number_format($monthlyAmount, 2, '.', ''),
-                'interval' => 'month',
-                'currency' => $currency,
-                'features' => [
-                    'Unlimited story access',
-                    'Direct funding of the nonprofits you read',
-                    'Cancel anytime',
-                ],
-                'is_current' => $currentPlan === 'monthly',
-            ],
-            [
-                'key' => 'yearly',
-                'name' => 'Yearly',
-                'amount' => number_format($yearlyAmount, 2, '.', ''),
-                'price' => number_format($yearlyAmount, 2, '.', ''),
-                'interval' => 'year',
-                'currency' => $currency,
-                'features' => [
-                    'Everything in Monthly',
-                    'Two months free vs. monthly billing',
-                    'Priority support',
-                ],
-                'is_current' => $currentPlan === 'yearly',
-                'savings_note' => 'Save 17% vs monthly',
-            ],
-        ];
-    }
-
     protected function invoices(User $user): array
     {
         return Payment::query()
@@ -221,54 +242,4 @@ class MemberSubscriptionService
             ])
             ->all();
     }
-=======
-use App\Services\Admin\PlatformSettingsService;
-
-class MemberSubscriptionService
-{
-    public function __construct(
-        protected PlatformSettingsService $settings,
-    ) {}
-
-    public function planCatalogue(): array
-    {
-        $settings = $this->settings->group('subscription_plans');
-        $plans = $settings['plans'] ?? [];
-
-        if (! is_array($plans)) {
-            return [];
-        }
-
-        return collect($plans)
-            ->filter(fn (mixed $plan): bool => is_array($plan) && ($plan['enabled'] ?? false) === true)
-            ->map(fn (array $plan): array => $this->normalisePlan($plan))
-            ->filter(fn (array $plan): bool => $plan !== [])
-            ->values()
-            ->all();
-    }
-
-    protected function normalisePlan(array $plan): array
-    {
-        foreach (['key', 'name', 'billing_interval', 'display_price'] as $field) {
-            if (! array_key_exists($field, $plan) || ! is_scalar($plan[$field])) {
-                return [];
-            }
-        }
-
-        $stripePriceId = $plan['stripe_price_id'] ?? null;
-
-        if ($stripePriceId !== null && ! is_scalar($stripePriceId)) {
-            return [];
-        }
-
-        return [
-            'key' => (string) $plan['key'],
-            'name' => (string) $plan['name'],
-            'billing_interval' => (string) $plan['billing_interval'],
-            'display_price' => (string) $plan['display_price'],
-            'stripe_price_id' => $stripePriceId === null ? null : (string) $stripePriceId,
-            'enabled' => true,
-        ];
-    }
->>>>>>> 2ebe816874cc743bde1c98d7c1016fe19fc26961
 }

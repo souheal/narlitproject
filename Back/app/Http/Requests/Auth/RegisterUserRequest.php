@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Services\Billing\PublicSubscriptionPlanService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -25,6 +26,12 @@ class RegisterUserRequest extends FormRequest
 
     public function rules(): array
     {
+        $keys = array_column(app(PublicSubscriptionPlanService::class)->enabledPlans(), 'key');
+
+        if ($keys === []) {
+            $keys = ['monthly', 'yearly'];
+        }
+
         return [
             'full_name' => ['required', 'string', 'max:255'],
             'email' => [
@@ -36,7 +43,7 @@ class RegisterUserRequest extends FormRequest
             ],
             'phone' => ['required', 'string', 'regex:/^\+?[0-9]{8,15}$/'],
             'password' => ['required', 'confirmed', Password::min(8)->letters()->mixedCase()->numbers()->symbols()],
-            'subscription_plan' => ['sometimes', Rule::in(['monthly', 'yearly'])],
+            'subscription_plan' => ['sometimes', Rule::in($keys)],
         ];
     }
 

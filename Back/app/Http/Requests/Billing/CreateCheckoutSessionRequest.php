@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Billing;
 
+use App\Services\Billing\PublicSubscriptionPlanService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CreateCheckoutSessionRequest extends FormRequest
 {
@@ -21,9 +23,15 @@ class CreateCheckoutSessionRequest extends FormRequest
 
     public function rules(): array
     {
+        $keys = array_column(app(PublicSubscriptionPlanService::class)->enabledPlans(), 'key');
+
+        if ($keys === []) {
+            $keys = ['monthly', 'yearly'];
+        }
+
         return [
             'email' => ['required', 'string', 'email:rfc', 'max:255'],
-            'subscription_plan' => ['sometimes', 'in:monthly,yearly'],
+            'subscription_plan' => ['sometimes', Rule::in($keys)],
         ];
     }
 
