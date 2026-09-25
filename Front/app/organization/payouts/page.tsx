@@ -5,6 +5,9 @@ import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
 import { Skeleton } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
+import OrgNav from "@/components/OrgNav";
+import PayoutsScene from "@/components/PayoutsScene";
+import { EarnedIcon, PendingIcon, HistoryIcon } from "@/components/OrgStatIcons";
 
 interface Payout {
   public_id: string;
@@ -148,27 +151,28 @@ export default function OrgPayoutsPage() {
 
   return (
     <div className="hm-shell" suppressHydrationWarning>
-      <nav className="hm-nav">
-        <div className="hm-nav-inner">
-          <a href="/organization/dashboard" className="hm-nav-brand">
-            <span className="hm-nav-mark">
-              <span className="hm-nm-orange" />
-              <span className="hm-nm-teal" />
-            </span>
-            <span className="hm-nav-wordmark">NarLit · Org</span>
-          </a>
-          <div className="hm-nav-links">
-            <a href="/organization/dashboard" className="hm-nav-link">Overview</a>
-            <a href="/organization/articles" className="hm-nav-link">Articles</a>
-            <a href="/organization/payouts" className="hm-nav-link hm-nav-link-active">Payouts</a>
-          </div>
-          <div className="hm-nav-user" />
-        </div>
-      </nav>
+      <OrgNav active="payouts" />
 
       <main className="hm-main">
+        <section className="hm-welcome hm-welcome-hero">
+          <div className="hm-welcome-scene">
+            <PayoutsScene />
+          </div>
+          <div className="hm-welcome-inner">
+            <div>
+              <p className="hm-welcome-kicker">Your earnings</p>
+              <h1 className="hm-welcome-title">
+                <span className="hm-welcome-name">Payouts</span>
+              </h1>
+              <p className="hm-welcome-sub">
+                Reader-funded earnings, paid out to your organization every month.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section className="hm-section">
-          <h2 className="hm-section-title">Payouts</h2>
+          <h2 className="hm-section-title">Summary</h2>
 
           {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
           {status && <p className="narlit-feedback narlit-feedback-success">{status}</p>}
@@ -283,13 +287,13 @@ export default function OrgPayoutsPage() {
               {/* Summary stats */}
               <div className="hm-stats-grid" style={{ marginTop: 20 }}>
                 <div className="hm-stat-card">
-                  <div className="hm-stat-icon hm-stat-icon-orange">$</div>
+                  <div className="hm-stat-icon hm-stat-icon-orange">{EarnedIcon}</div>
                   <div className="hm-stat-value">${summary?.total_paid ?? "0.00"}</div>
                   <div className="hm-stat-label">Total Paid</div>
                   <div className="hm-stat-hint">All time · {currency}</div>
                 </div>
                 <div className="hm-stat-card">
-                  <div className="hm-stat-icon hm-stat-icon-teal">⏳</div>
+                  <div className="hm-stat-icon hm-stat-icon-teal">{PendingIcon}</div>
                   <div className="hm-stat-value">${summary?.pending_payout ?? "0.00"}</div>
                   <div className="hm-stat-label">Pending Payout</div>
                   <div className="hm-stat-hint">
@@ -299,7 +303,7 @@ export default function OrgPayoutsPage() {
                   </div>
                 </div>
                 <div className="hm-stat-card">
-                  <div className="hm-stat-icon hm-stat-icon-purple">📊</div>
+                  <div className="hm-stat-icon hm-stat-icon-orange">{HistoryIcon}</div>
                   <div className="hm-stat-value">{payouts.length}</div>
                   <div className="hm-stat-label">Recent Payouts</div>
                   <div className="hm-stat-hint">Last {payouts.length} cycles</div>

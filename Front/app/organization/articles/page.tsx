@@ -5,6 +5,8 @@ import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
+import OrgNav from "@/components/OrgNav";
+import ArticlesScene from "@/components/ArticlesScene";
 
 interface OrgArticle {
   public_id: string;
@@ -93,28 +95,29 @@ export default function OrgArticlesPage() {
 
   return (
     <div className="hm-shell" suppressHydrationWarning>
-      <nav className="hm-nav">
-        <div className="hm-nav-inner">
-          <a href="/organization/dashboard" className="hm-nav-brand">
-            <span className="hm-nav-mark">
-              <span className="hm-nm-orange" />
-              <span className="hm-nm-teal" />
-            </span>
-            <span className="hm-nav-wordmark">NarLit · Org</span>
-          </a>
-          <div className="hm-nav-links">
-            <a href="/organization/dashboard" className="hm-nav-link">Overview</a>
-            <a href="/organization/articles" className="hm-nav-link hm-nav-link-active">Articles</a>
-            <a href="/organization/payouts" className="hm-nav-link">Payouts</a>
-          </div>
-          <div className="hm-nav-user" />
-        </div>
-      </nav>
+      <OrgNav active="articles" />
 
       <main className="hm-main">
+        <section className="hm-welcome hm-welcome-hero">
+          <div className="hm-welcome-scene">
+            <ArticlesScene />
+          </div>
+          <div className="hm-welcome-inner">
+            <div>
+              <p className="hm-welcome-kicker">Your stories</p>
+              <h1 className="hm-welcome-title">
+                <span className="hm-welcome-name">Articles</span>
+              </h1>
+              <p className="hm-welcome-sub">
+                Draft, submit and track every story you publish on NarLit.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section className="hm-section">
           <div className="hm-section-header">
-            <h2 className="hm-section-title">Your Articles</h2>
+            <h2 className="hm-section-title">All articles</h2>
             <a href="/organization/articles/new" className="hm-article-btn" style={{ display: "inline-block" }}>
               + New article
             </a>

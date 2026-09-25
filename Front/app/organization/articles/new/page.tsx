@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState, useTransition } from "react";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
 import { BrandLoader } from "@/components/BrandLoader";
+import OrgNav from "@/components/OrgNav";
 
 const CATEGORIES = [
   "Civil Rights",
@@ -84,23 +85,7 @@ export default function NewArticlePage() {
 
   return (
     <div className="hm-shell" suppressHydrationWarning>
-      <nav className="hm-nav">
-        <div className="hm-nav-inner">
-          <a href="/organization/dashboard" className="hm-nav-brand">
-            <span className="hm-nav-mark">
-              <span className="hm-nm-orange" />
-              <span className="hm-nm-teal" />
-            </span>
-            <span className="hm-nav-wordmark">NarLit · Org</span>
-          </a>
-          <div className="hm-nav-links">
-            <a href="/organization/dashboard" className="hm-nav-link">Overview</a>
-            <a href="/organization/articles" className="hm-nav-link hm-nav-link-active">Articles</a>
-            <a href="/organization/payouts" className="hm-nav-link">Payouts</a>
-          </div>
-          <div className="hm-nav-user" />
-        </div>
-      </nav>
+      <OrgNav active="articles" />
 
       <main className="hm-main">
         <section className="hm-section" style={{ maxWidth: 780, margin: "0 auto" }}>

@@ -1512,6 +1512,17 @@ a {
   -webkit-text-fill-color: transparent;
   line-height: 1;
 }
+/* Organization wordmark "NarLit · Org": the plain 50/50 gradient split would
+   land mid-word on this longer text, so each part is coloured explicitly —
+   the whole "NarLit" orange, "· Org" teal — and the size is trimmed to fit. */
+.hm-nav-wordmark-org {
+  font-size: 1.3rem;
+  white-space: nowrap;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+.hm-wm-orange { color: var(--orange); }
+.hm-wm-teal { color: var(--teal); }
 .hm-nav-links {
   display: flex;
   gap: 6px;
@@ -2162,6 +2173,67 @@ section[id],
   50% { transform: rotate(2.4deg); }
 }
 
+/* ---- Organization dashboard: headquarters scene ---- */
+.os-building,
+.os-card,
+.os-heart,
+.os-heart-wrap,
+.os-coins,
+.os-mote {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.os-building { animation: isFloat 8s ease-in-out infinite; }
+.os-card { animation: isFloatOpen 6s ease-in-out infinite 0.6s; }
+.os-heart-wrap { animation: isFloat 6s ease-in-out infinite 0.3s; }
+.os-heart { animation: isBeat 3.2s ease-in-out infinite; }
+.os-coins { animation: isFloat 8s ease-in-out infinite 1.4s; }
+.os-mote-1 { animation: isRise 5.4s ease-in-out infinite 0.3s; }
+.os-mote-2 { animation: isRise 6.2s ease-in-out infinite 1.2s; }
+.os-mote-3 { animation: isRise 5.8s ease-in-out infinite 2.1s; }
+.os-mote-4 { animation: isRise 6.6s ease-in-out infinite 3s; }
+
+/* ---- Organization Articles: manuscript scene ---- */
+.as-sheet,
+.as-pen,
+.as-mote {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.as-sheet-1 { animation: isFloat 7s ease-in-out infinite 0.8s; }
+.as-sheet-2 { animation: isFloat 7s ease-in-out infinite 0.4s; }
+.as-sheet-3 { animation: isFloat 7s ease-in-out infinite; }
+.as-pen { animation: isFloatOpen 5.5s ease-in-out infinite 0.5s; }
+.as-mote-1 { animation: isRise 5.4s ease-in-out infinite 0.3s; }
+.as-mote-2 { animation: isRise 6.2s ease-in-out infinite 1.2s; }
+.as-mote-3 { animation: isRise 5.8s ease-in-out infinite 2.1s; }
+.as-mote-4 { animation: isRise 6.6s ease-in-out infinite 3s; }
+
+/* ---- Organization Payouts: safe scene ---- */
+.ps-safe,
+.ps-coins,
+.ps-drop,
+.ps-mote {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.ps-safe { animation: isFloat 8s ease-in-out infinite; }
+.ps-coins { animation: isFloat 8s ease-in-out infinite 1.4s; }
+/* Coins fall toward the slot and fade as they reach it. */
+.ps-drop-1 { animation: psDrop 3.6s ease-in infinite; }
+.ps-drop-2 { animation: psDrop 3.6s ease-in infinite 1.8s; }
+.ps-mote-1 { animation: isRise 5.4s ease-in-out infinite 0.3s; }
+.ps-mote-2 { animation: isRise 6.2s ease-in-out infinite 1.2s; }
+.ps-mote-3 { animation: isRise 5.8s ease-in-out infinite 2.1s; }
+.ps-mote-4 { animation: isRise 6.6s ease-in-out infinite 3s; }
+
+@keyframes psDrop {
+  0% { transform: translateY(-18px); opacity: 0; }
+  20% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { transform: translateY(26px); opacity: 0; }
+}
+
 /* Below this the copy would run under the artwork. */
 @media (max-width: 1080px) {
   .hm-welcome-scene { width: 320px; height: 260px; opacity: 0.5; right: -34px; }
@@ -2176,7 +2248,10 @@ section[id],
   .is-open, .is-ring, .is-mote,
   .is-heart, .is-heart-wrap,
   .ds-orb, .ds-card, .ds-star, .ds-mote, .ds-orbit,
-  .gs-bar, .gs-sprout, .gs-coins, .gs-mote { animation: none; }
+  .gs-bar, .gs-sprout, .gs-coins, .gs-mote,
+  .os-building, .os-card, .os-heart, .os-heart-wrap, .os-coins, .os-mote,
+  .as-sheet, .as-pen, .as-mote,
+  .ps-safe, .ps-coins, .ps-drop, .ps-mote { animation: none; }
 }
 .hm-welcome-kicker {
   margin: 0 0 6px;
@@ -2250,6 +2325,9 @@ section[id],
   scroll-behavior: smooth;
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
+  /* Match the inline padding so the first card snaps to scrollLeft 0, not 2px
+     in — otherwise the rail looks already scrolled and fades its start edge. */
+  scroll-padding-inline: 2px;
   /* Hide the native scrollbar in every engine; the custom bar replaces it. */
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -2318,13 +2396,18 @@ section[id],
   background: rgba(5, 46, 53, 0.07);
   cursor: pointer;
   touch-action: none;
-  transition: height 0.18s ease, background 0.18s ease;
+  transition: background 0.18s ease;
 }
 .hm-rail:hover .hm-rail-bar,
 .hm-rail:focus-within .hm-rail-bar,
 .hm-rail-bar-dragging {
-  height: 8px;
   background: rgba(5, 46, 53, 0.10);
+}
+/* While dragging, the rows must follow the pointer 1:1: smooth scrolling and
+   snapping would both make the thumb trail behind the cursor. */
+.hm-rail-dragging .hm-rail-track {
+  scroll-behavior: auto;
+  scroll-snap-type: none;
 }
 .hm-rail-thumb {
   position: absolute;
@@ -2412,6 +2495,10 @@ section[id],
 .hm-stat-icon-orange { background: rgba(255,122,0,0.12); color: var(--orange-deep); }
 .hm-stat-icon-teal   { background: rgba(17,182,200,0.12); color: var(--teal-deep); }
 .hm-stat-icon-purple { background: rgba(124,92,191,0.12); color: #7c5cbf; }
+.hm-stat-icon svg {
+  width: 22px;
+  height: 22px;
+}
 .hm-stat-value {
   font-size: 1.8rem;
   font-weight: 900;

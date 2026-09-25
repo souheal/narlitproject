@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
 import { Skeleton } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
+import OrgScene from "@/components/OrgScene";
+import { EarnedIcon, ReadsIcon, PublishedIcon, PayoutIcon } from "@/components/OrgStatIcons";
+import OrgNav from "@/components/OrgNav";
 
 interface OrgProfile {
   organization_name: string;
@@ -18,6 +21,8 @@ interface Stat {
   label: string;
   value: string | number;
   hint?: string;
+  icon: ReactNode;
+  tone: "orange" | "teal";
 }
 
 interface RecentArticle {
@@ -58,7 +63,6 @@ export default function OrgDashboardPage() {
   const [data, setData] = useState<OrgDashboard | null>(null);
   const [checking, setChecking] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [navOpen, setNavOpen] = useState(false);
   const [error, setError] = useState("");
 
   async function loadDashboard() {
@@ -90,12 +94,6 @@ export default function OrgDashboardPage() {
     });
   }, []);
 
-  async function handleLogout() {
-    try { await apiFetch("/auth/logout", { method: "POST" }); } catch { /* noop */ }
-    clearToken();
-    window.location.href = "/login";
-  }
-
   if (checking) {
     return (
       <BrandLoader />
@@ -109,49 +107,23 @@ export default function OrgDashboardPage() {
   const maxMonthly = Math.max(1, ...monthly.map((m) => m.reads));
 
   const stats: Stat[] = [
-    { label: "Earned This Month", value: `$${s?.earned_this_month ?? "0.00"}`, hint: `$${s?.earned_all_time ?? "0.00"} all time` },
-    { label: "Reads This Month", value: s?.total_reads_this_month ?? 0, hint: `${s?.unique_readers_this_month ?? 0} unique readers` },
-    { label: "Published Articles", value: s?.published_articles ?? 0, hint: `${s?.pending_articles ?? 0} pending review` },
-    { label: "Pending Payout", value: `$${s?.pending_payout ?? "0.00"}`, hint: "Paid monthly" },
+    { label: "Earned This Month", value: `$${s?.earned_this_month ?? "0.00"}`, hint: `$${s?.earned_all_time ?? "0.00"} all time`, icon: EarnedIcon, tone: "orange" },
+    { label: "Reads This Month", value: s?.total_reads_this_month ?? 0, hint: `${s?.unique_readers_this_month ?? 0} unique readers`, icon: ReadsIcon, tone: "teal" },
+    { label: "Published Articles", value: s?.published_articles ?? 0, hint: `${s?.pending_articles ?? 0} pending review`, icon: PublishedIcon, tone: "orange" },
+    { label: "Pending Payout", value: `$${s?.pending_payout ?? "0.00"}`, hint: "Paid monthly", icon: PayoutIcon, tone: "teal" },
   ];
 
   return (
     <div className="hm-shell" suppressHydrationWarning>
-      <nav className="hm-nav">
-        <div className="hm-nav-inner">
-          <a href="/organization/dashboard" className="hm-nav-brand">
-            <span className="hm-nav-mark">
-              <span className="hm-nm-orange" />
-              <span className="hm-nm-teal" />
-            </span>
-            <span className="hm-nav-wordmark">NarLit · Org</span>
-          </a>
-          <div className="hm-nav-links">
-            <a href="/organization/dashboard" className="hm-nav-link hm-nav-link-active">Overview</a>
-            <a href="/organization/articles" className="hm-nav-link">Articles</a>
-            <a href="/organization/payouts" className="hm-nav-link">Payouts</a>
-          </div>
-          <div className="hm-nav-user">
-            <div className="hm-nav-avatar" onClick={() => setNavOpen(!navOpen)}>
-              {org?.initials ?? "OR"}
-            </div>
-            {navOpen && (
-              <div className="hm-nav-dropdown">
-                <div className="hm-nav-dd-name">{org?.organization_name ?? "Organization"}</div>
-                <div className="hm-nav-dd-email">{org?.email ?? ""}</div>
-                <div className="hm-nav-dd-divider" />
-                <a className="hm-nav-dd-item" href="/profile">Profile</a>
-                <button className="hm-nav-dd-item" onClick={handleLogout}>Sign out</button>
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
+      <OrgNav active="overview" name={org?.organization_name} email={org?.email} initials={org?.initials} />
 
       <main className="hm-main">
         {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
 
-        <section className="hm-welcome">
+        <section className="hm-welcome hm-welcome-hero">
+          <div className="hm-welcome-scene">
+            <OrgScene />
+          </div>
           <div className="hm-welcome-inner">
             <div>
               <p className="hm-welcome-kicker">Welcome back</p>
@@ -196,9 +168,7 @@ export default function OrgDashboardPage() {
             <div className="hm-stats-grid">
               {stats.map((stat, idx) => (
                 <div key={idx} className="hm-stat-card">
-                  <div className={`hm-stat-icon hm-stat-icon-${["orange", "teal", "purple", "orange"][idx]}`}>
-                    {["$", "📖", "📝", "💰"][idx]}
-                  </div>
+                  <div className={`hm-stat-icon hm-stat-icon-${stat.tone}`}>{stat.icon}</div>
                   <div className="hm-stat-value">{stat.value}</div>
                   <div className="hm-stat-label">{stat.label}</div>
                   {stat.hint && <div className="hm-stat-hint">{stat.hint}</div>}

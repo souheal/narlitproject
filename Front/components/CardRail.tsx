@@ -9,8 +9,9 @@ interface Props {
   busy?: boolean;
 }
 
-/** Sub-pixel scroll positions mean an exact edge comparison never quite lands. */
-const EDGE_EPSILON = 2;
+/** Sub-pixel scroll positions and display scaling mean an exact edge comparison
+ *  never quite lands; a few pixels of slack keeps the fade off at the ends. */
+const EDGE_EPSILON = 8;
 
 /** The thumb stays grabbable even when the row is very long. */
 const MIN_THUMB_RATIO = 0.14;
@@ -57,6 +58,9 @@ export default function CardRail({ children, label, busy }: Props) {
     };
   }, [sync, children]);
 
+  /** Where on the thumb the pointer grabbed it, so the thumb doesn't jump. */
+  const grabRef = useRef(0);
+
   /** Map a pointer position on the bar to a scroll offset. */
   const scrollToPointer = useCallback((clientX: number) => {
     const track = trackRef.current;
@@ -68,16 +72,24 @@ export default function CardRail({ children, label, busy }: Props) {
     const usable = rect.width - thumbWidth;
     if (usable <= 0) return;
 
-    // Grab the thumb by its centre so it lands under the cursor.
-    const offset = clientX - rect.left - thumbWidth / 2;
+    const offset = clientX - rect.left - grabRef.current;
     const next = Math.min(1, Math.max(0, offset / usable));
     track.scrollLeft = next * (track.scrollWidth - track.clientWidth);
   }, [ratio]);
 
   function onBarPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (!overflow) return;
+    if (!overflow || !barRef.current) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
+
+    const rect = barRef.current.getBoundingClientRect();
+    const thumbWidth = rect.width * ratio;
+    const thumbLeft = rect.left + progress * (rect.width - thumbWidth);
+    const onThumb = e.clientX >= thumbLeft && e.clientX <= thumbLeft + thumbWidth;
+    // Grabbing the thumb keeps it under the same spot of the cursor; clicking
+    // the empty bar centres the thumb on the cursor.
+    grabRef.current = onThumb ? e.clientX - thumbLeft : thumbWidth / 2;
+
     setDragging(true);
     scrollToPointer(e.clientX);
   }
@@ -107,7 +119,8 @@ export default function CardRail({ children, label, busy }: Props) {
       className={
         "hm-rail" +
         (atStart ? "" : " hm-rail-fade-start") +
-        (atEnd ? "" : " hm-rail-fade-end")
+        (atEnd ? "" : " hm-rail-fade-end") +
+        (dragging ? " hm-rail-dragging" : "")
       }
     >
       <div
