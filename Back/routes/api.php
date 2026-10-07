@@ -20,6 +20,8 @@ use App\Http\Controllers\Api\Billing\StripeCheckoutController;
 use App\Http\Controllers\Api\Billing\StripeWebhookController;
 use App\Http\Controllers\Api\Member\MemberArticleController;
 use App\Http\Controllers\Api\Member\MemberDashboardController;
+use App\Http\Controllers\Api\Public\PublicArticleController;
+use App\Http\Controllers\Api\Public\PublicOrganizationController;
 use App\Http\Controllers\Api\SubscriptionPlanController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -56,6 +58,10 @@ Route::prefix('v1')->group(function () {
     Route::post('/billing/checkout', [StripeCheckoutController::class, 'store'])->middleware('throttle:billing.checkout');
     Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->middleware('throttle:billing.webhook');
     Route::get('/subscription/plans', [SubscriptionPlanController::class, 'index']);
+    Route::get('/articles', [PublicArticleController::class, 'index']);
+    Route::get('/articles/{article}', [PublicArticleController::class, 'show']);
+    Route::get('/organizations', [PublicOrganizationController::class, 'index']);
+    Route::get('/organizations/{organization}', [PublicOrganizationController::class, 'show']);
 
     Route::middleware(['auth:sanctum', 'narlit.user.access'])->prefix('member')->group(function () {
         Route::get('/dashboard', [MemberDashboardController::class, 'show']);
