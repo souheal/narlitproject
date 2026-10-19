@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Subscription;
 use App\Models\User;
+use App\Notifications\Auth\SendOtpNotification;
 use App\Services\Auth\OtpService;
 use App\Services\Auth\PhoneMfaService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -22,6 +24,7 @@ class UserSubscriberFlowTest extends TestCase
 
     public function test_user_signup_payment_first_login_phone_mfa_and_future_login_flow(): void
     {
+        Notification::fake();
         config()->set('services.stripe.fake_checkout', true);
         DB::table('platform_settings')->insert([
             'key' => 'subscription_plans.plans',
@@ -57,6 +60,7 @@ class UserSubscriberFlowTest extends TestCase
 
         $user = User::query()->where('email', 'muhannad@test.com')->firstOrFail();
         $this->assertSame('muhannad', $user->username);
+        Notification::assertSentTo($user, SendOtpNotification::class);
 
         $otp = app(OtpService::class)->previewForUser($user);
 

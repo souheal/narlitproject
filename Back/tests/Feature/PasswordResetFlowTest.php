@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Notifications\Auth\SendPasswordResetOtpNotification;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -19,6 +21,7 @@ class PasswordResetFlowTest extends TestCase
 
     public function test_user_can_reset_password_with_email_otp_and_existing_tokens_are_invalidated(): void
     {
+        Notification::fake();
         $user = $this->user();
         $token = $user->createToken('existing-token')->plainTextToken;
 
@@ -33,6 +36,7 @@ class PasswordResetFlowTest extends TestCase
             ->assertJsonStructure(['otp']);
 
         $otp = $forgot->json('otp');
+        Notification::assertSentTo($user, SendPasswordResetOtpNotification::class);
         $user->refresh();
 
         $this->assertNotSame($otp, $user->password_reset_otp_code);

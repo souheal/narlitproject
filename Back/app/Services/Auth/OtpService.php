@@ -25,9 +25,7 @@ class OtpService
 
         Cache::put($this->previewCacheKey($user), $otp, $expiresAt);
 
-        if (! app()->environment('local')) {
-            $user->notify((new SendOtpNotification($otp, $expiresAt))->onQueue('mail'));
-        }
+        $user->notify((new SendOtpNotification($otp, $expiresAt))->onQueue('mail'));
 
         return [
             'otp' => $otp,

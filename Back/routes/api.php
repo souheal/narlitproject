@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\Billing\StripeCheckoutController;
 use App\Http\Controllers\Api\Billing\StripeWebhookController;
 use App\Http\Controllers\Api\Member\MemberArticleController;
 use App\Http\Controllers\Api\Member\MemberDashboardController;
+use App\Http\Controllers\Api\Organization\OrganizationArticleController;
 use App\Http\Controllers\Api\Public\PublicArticleController;
 use App\Http\Controllers\Api\Public\PublicOrganizationController;
 use App\Http\Controllers\Api\SubscriptionPlanController;
@@ -67,6 +68,14 @@ Route::prefix('v1')->group(function () {
         Route::get('/dashboard', [MemberDashboardController::class, 'show']);
         Route::get('/articles', [MemberArticleController::class, 'index']);
         Route::post('/articles/{publicId}/read', [MemberArticleController::class, 'markRead']);
+    });
+
+    Route::middleware(['auth:sanctum', 'narlit.organization'])->prefix('organization')->group(function () {
+        Route::get('/articles', [OrganizationArticleController::class, 'index']);
+        Route::post('/articles', [OrganizationArticleController::class, 'store']);
+        Route::get('/articles/{article}', [OrganizationArticleController::class, 'show']);
+        Route::patch('/articles/{article}', [OrganizationArticleController::class, 'update']);
+        Route::post('/articles/{article}/submit', [OrganizationArticleController::class, 'submit']);
     });
 
     Route::middleware(['auth:sanctum', 'narlit.admin'])->prefix('admin')->group(function () {

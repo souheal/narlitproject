@@ -38,9 +38,7 @@ class PasswordResetService
 
             Cache::put($this->previewCacheKey($user), $otp, $expiresAt);
 
-            if (! app()->environment('local')) {
-                $user->notify((new SendPasswordResetOtpNotification($otp, $expiresAt))->onQueue('mail'));
-            }
+            $user->notify((new SendPasswordResetOtpNotification($otp, $expiresAt))->onQueue('mail'));
         }, 3);
 
         return [

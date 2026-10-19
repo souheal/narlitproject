@@ -6,11 +6,16 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\RejectOrganizationRequest;
 use App\Models\OrganizationProfile;
+use App\Notifications\Organization\OrganizationApprovedNotification;
+use App\Notifications\Organization\OrganizationRejectedNotification;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class OrganizationReviewController extends Controller
 {
@@ -37,21 +42,25 @@ class OrganizationReviewController extends Controller
 
     public function approve(string $publicId, Request $request): JsonResponse
     {
-        $profile = $this->findProfile($publicId);
+        $profile = DB::transaction(function () use ($publicId, $request): OrganizationProfile {
+            $profile = $this->findProfile($publicId, true);
 
-        if ($profile->user->email_verified_at === null) {
-            throw new ApiException('The organization must verify its email before approval.', 422);
-        }
+            if ($profile->verification_status === 'approved') {
+                return $profile;
+            }
 
-        if (! $profile->irs_verified) {
-            throw new ApiException('The organization must pass IRS verification before approval.', 422);
-        }
+            if ($profile->user->email_verified_at === null) {
+                throw new ApiException('The organization must verify its email before approval.', 422);
+            }
 
-        if ($profile->certificate_file === '' || ! $profile->documents()->where('type', 'certificate')->exists()) {
-            throw new ApiException('The organization must upload a certificate of incorporation before approval.', 422);
-        }
+            if (! $profile->irs_verified) {
+                throw new ApiException('The organization must pass IRS verification before approval.', 422);
+            }
 
-        DB::transaction(function () use ($profile, $request): void {
+            if ($profile->certificate_file === '' || ! $profile->documents()->where('type', 'certificate')->exists()) {
+                throw new ApiException('The organization must upload a certificate of incorporation before approval.', 422);
+            }
+
             $profile->forceFill([
                 'verification_status' => 'approved',
                 'reviewed_by' => $request->user()->id,
@@ -64,6 +73,10 @@ class OrganizationReviewController extends Controller
             ])->save();
 
             $this->log($request, $profile, 'organization.approved');
+
+            $this->notifyAfterCommit($profile, 'approved');
+
+            return $profile;
         }, 3);
 
         return $this->success('Organization approved successfully.', [
@@ -73,9 +86,13 @@ class OrganizationReviewController extends Controller
 
     public function reject(string $publicId, RejectOrganizationRequest $request): JsonResponse
     {
-        $profile = $this->findProfile($publicId);
+        $profile = DB::transaction(function () use ($publicId, $request): OrganizationProfile {
+            $profile = $this->findProfile($publicId, true);
 
-        DB::transaction(function () use ($profile, $request): void {
+            if ($profile->verification_status === 'rejected') {
+                return $profile;
+            }
+
             $profile->forceFill([
                 'verification_status' => 'rejected',
                 'reviewed_by' => $request->user()->id,
@@ -90,6 +107,10 @@ class OrganizationReviewController extends Controller
             $this->log($request, $profile, 'organization.rejected', [
                 'reason' => $request->validated('reason'),
             ]);
+
+            $this->notifyAfterCommit($profile, 'rejected');
+
+            return $profile;
         }, 3);
 
         return $this->success('Organization rejected successfully.', [
@@ -97,11 +118,12 @@ class OrganizationReviewController extends Controller
         ]);
     }
 
-    protected function findProfile(string $publicId): OrganizationProfile
+    protected function findProfile(string $publicId, bool $lock = false): OrganizationProfile
     {
         $profile = OrganizationProfile::query()
             ->with('user')
             ->where('public_id', $publicId)
+            ->when($lock, fn ($query) => $query->lockForUpdate())
             ->first();
 
         if ($profile === null) {
@@ -109,6 +131,46 @@ class OrganizationReviewController extends Controller
         }
 
         return $profile;
+    }
+
+    protected function notifyAfterCommit(OrganizationProfile $profile, string $decision): void
+    {
+        $user = $profile->user;
+        $isOrganization = $user !== null
+            && DB::table('roles')->where('id', $user->role_id)->value('name') === 'organization';
+        $email = $isOrganization ? trim((string) $user->email) : '';
+        $recipient = $isOrganization && $user->email_verified_at !== null
+            && filter_var($email, FILTER_VALIDATE_EMAIL)
+                ? $email
+                : null;
+        $organizationName = $profile->organization_name;
+        $profileId = $profile->id;
+
+        DB::afterCommit(function () use ($recipient, $organizationName, $profileId, $decision): void {
+            if ($recipient === null) {
+                Log::warning('Organization review email skipped: no verified organization contact.', [
+                    'organization_profile_id' => $profileId,
+                    'decision' => $decision,
+                ]);
+
+                return;
+            }
+
+            try {
+                $notification = $decision === 'approved'
+                    ? new OrganizationApprovedNotification($organizationName)
+                    : new OrganizationRejectedNotification($organizationName);
+
+                Notification::route('mail', $recipient)
+                    ->notify($notification->onConnection('database')->onQueue('mail'));
+            } catch (Throwable $exception) {
+                Log::warning('Organization review email could not be queued.', [
+                    'organization_profile_id' => $profileId,
+                    'decision' => $decision,
+                    'exception_type' => $exception::class,
+                ]);
+            }
+        });
     }
 
     protected function payload(OrganizationProfile $profile): array

@@ -8,6 +8,7 @@ use App\Exceptions\ApiException;
 use App\Http\Middleware\EnsureAdminAccess;
 use App\Http\Middleware\EnsureIdempotency;
 use App\Http\Middleware\EnsureNarLitUserAccess;
+use App\Http\Middleware\EnsureOrganizationAccess;
 use App\Http\Middleware\EnsurePermission;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\UseAdminTokenCookieForSanctum;
@@ -47,6 +48,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'narlit.admin' => EnsureAdminAccess::class,
             'narlit.user.access' => EnsureNarLitUserAccess::class,
+            'narlit.organization' => EnsureOrganizationAccess::class,
             'idempotency' => EnsureIdempotency::class,
             'permission' => EnsurePermission::class,
             'role' => RoleMiddleware::class,

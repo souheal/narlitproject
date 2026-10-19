@@ -25,7 +25,7 @@ class ForgotPasswordController extends Controller
             'next_step' => 'verify_reset_otp',
         ];
 
-        if (app()->environment(['local', 'testing']) && ($result['otp'] ?? null) !== null) {
+        if (app()->environment('testing') && ($result['otp'] ?? null) !== null) {
             $data['otp'] = $result['otp'];
         }
 

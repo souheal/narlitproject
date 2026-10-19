@@ -5,11 +5,13 @@ namespace Tests\Feature;
 use App\Models\IrsExemptOrganization;
 use App\Models\OrganizationProfile;
 use App\Models\User;
+use App\Notifications\Auth\SendOtpNotification;
 use App\Services\Auth\OtpService;
 use App\Services\Auth\PhoneMfaService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
@@ -27,6 +29,7 @@ class OrganizationRegistrationFlowTest extends TestCase
 
     public function test_organization_registers_with_irs_match_certificate_pdf_and_email_otp(): void
     {
+        Notification::fake();
         $this->seedIrsOrganization('123456789', 'Athar Foundation');
 
         $response = $this->post('/api/v1/auth/organization/register', [
@@ -49,6 +52,7 @@ class OrganizationRegistrationFlowTest extends TestCase
             ->assertJsonPath('data.organization.verification_status', 'pending');
 
         $user = User::query()->where('email', 'org@test.com')->firstOrFail();
+        Notification::assertSentTo($user, SendOtpNotification::class);
         $profile = OrganizationProfile::query()->where('user_id', $user->id)->firstOrFail();
 
         $this->assertSame('organization', DB::table('roles')->where('id', $user->role_id)->value('name'));

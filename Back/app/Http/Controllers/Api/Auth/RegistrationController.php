@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\RegisterUserRequest;
-use App\Services\Auth\OtpService;
 use App\Services\Auth\RegistrationService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -15,7 +14,6 @@ class RegistrationController extends Controller
 
     public function __construct(
         protected RegistrationService $registrationService,
-        protected OtpService $otpService,
     ) {
     }
 
@@ -32,10 +30,6 @@ class RegistrationController extends Controller
             ],
             'otp_expires_at' => $otpPayload['expires_at']->toIso8601String(),
         ];
-
-        if (app()->environment('local')) {
-            $data['otp'] = $this->otpService->previewForUser($user);
-        }
 
         $data['next_step'] = 'verify_email';
 

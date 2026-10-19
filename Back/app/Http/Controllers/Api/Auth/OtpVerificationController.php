@@ -78,10 +78,6 @@ class OtpVerificationController extends Controller
             'next_step' => 'verify_email',
         ];
 
-        if (app()->environment('local')) {
-            $data['otp'] = $this->otpService->previewForUser($user);
-        }
-
         return $this->success('A new verification code has been sent.', $data);
     }
 
