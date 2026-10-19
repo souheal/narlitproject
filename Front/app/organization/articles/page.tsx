@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { clearToken } from "@/lib/auth";
-import { apiFetch, validateSession } from "@/lib/api";
+import { apiFetch, requireRole } from "@/lib/api";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
 import OrgNav from "@/components/OrgNav";
@@ -19,6 +18,7 @@ interface OrgArticle {
   total_reads: number;
   total_unique_reads: number;
   total_points_generated: number;
+  cover_image_url: string | null;
 }
 
 interface Pagination {
@@ -69,12 +69,8 @@ export default function OrgArticlesPage() {
   }
 
   useEffect(() => {
-    validateSession().then((valid) => {
-      if (!valid) {
-        clearToken();
-        window.location.href = "/login";
-        return;
-      }
+    requireRole(["organization"]).then((user) => {
+      if (!user) return;
       setChecking(false);
       loadArticles(1);
     });
@@ -157,6 +153,19 @@ export default function OrgArticlesPage() {
           <div className="hm-articles">
             {articles.map((a) => (
               <article key={a.public_id} className="hm-article-card">
+                {a.cover_image_url && (
+                  <img
+                    src={a.cover_image_url}
+                    alt=""
+                    style={{
+                      width: "100%",
+                      height: 160,
+                      objectFit: "cover",
+                      borderRadius: 10,
+                      marginBottom: 12,
+                    }}
+                  />
+                )}
                 <div className="hm-article-top">
                   <span className="hm-article-org">{STATUS_LABEL[a.status] ?? a.status}</span>
                   {a.category && <span className="hm-article-cat">{a.category}</span>}

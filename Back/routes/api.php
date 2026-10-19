@@ -58,10 +58,15 @@ Route::prefix('v1')->group(function () {
         Route::post('/resend-phone-mfa', [PhoneMfaController::class, 'resend'])->middleware('throttle:auth.phone_mfa.resend');
 
         Route::middleware(['auth:sanctum', 'narlit.user.access'])->get('/me', function (Request $request) {
+            $user = $request->user()->loadMissing('role');
+            $userArray = $user->toArray();
+            $userArray['role_name'] = $user->role?->name;
+            $userArray['has_organization_profile'] = $user->organizationProfile !== null;
+
             return response()->json([
                 'message' => 'Authenticated user retrieved.',
                 'data' => [
-                    'user' => $request->user(),
+                    'user' => $userArray,
                 ],
             ]);
         });
@@ -134,6 +139,9 @@ Route::prefix('v1')->group(function () {
         Route::get('/dashboard', [OrganizationDashboardController::class, 'show']);
         Route::get('/articles', [OrganizationArticleController::class, 'index']);
         Route::post('/articles', [OrganizationArticleController::class, 'store']);
+        Route::get('/articles/{publicId}', [OrganizationArticleController::class, 'show']);
+        Route::post('/articles/{publicId}', [OrganizationArticleController::class, 'update']);
+        Route::delete('/articles/{publicId}', [OrganizationArticleController::class, 'destroy']);
         Route::get('/payouts', [OrganizationPayoutController::class, 'index']);
         Route::post('/stripe-connect/onboarding', [OrganizationStripeConnectController::class, 'onboarding']);
         Route::get('/stripe-connect/status', [OrganizationStripeConnectController::class, 'status']);

@@ -1,8 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState, useTransition } from "react";
-import { clearToken } from "@/lib/auth";
-import { apiFetch, validateSession } from "@/lib/api";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState, useTransition } from "react";
+import { apiFetch, requireRole } from "@/lib/api";
 import { BrandLoader } from "@/components/BrandLoader";
 import OrgNav from "@/components/OrgNav";
 
@@ -18,6 +17,9 @@ const CATEGORIES = [
   "Other",
 ];
 
+const COVER_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
+const COVER_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
+
 export default function NewArticlePage() {
   const [checking, setChecking] = useState(true);
   const [title, setTitle] = useState("");
@@ -26,18 +28,55 @@ export default function NewArticlePage() {
   const [body, setBody] = useState("");
   const [readTime, setReadTime] = useState<number>(5);
   const [status, setStatus] = useState<"draft" | "pending_review">("pending_review");
+  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const coverInputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    validateSession().then((valid) => {
-      if (!valid) {
-        clearToken();
-        window.location.href = "/login";
-        return;
-      }
-      setChecking(false);
+    if (!coverImage) {
+      setCoverPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(coverImage);
+    setCoverPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [coverImage]);
+
+  function handleCoverChange(event: ChangeEvent<HTMLInputElement>) {
+    setError("");
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      setCoverImage(null);
+      return;
+    }
+    if (file.size > COVER_IMAGE_MAX_BYTES) {
+      setError("Cover image must be 4 MB or smaller.");
+      event.target.value = "";
+      setCoverImage(null);
+      return;
+    }
+    if (!COVER_IMAGE_ACCEPT.split(",").includes(file.type)) {
+      setError("Cover image must be JPG, PNG, WEBP, or GIF.");
+      event.target.value = "";
+      setCoverImage(null);
+      return;
+    }
+    setCoverImage(file);
+  }
+
+  function removeCover() {
+    setCoverImage(null);
+    if (coverInputRef.current) {
+      coverInputRef.current.value = "";
+    }
+  }
+
+  useEffect(() => {
+    requireRole(["organization"]).then((user) => {
+      if (user) setChecking(false);
     });
   }, []);
 
@@ -48,16 +87,20 @@ export default function NewArticlePage() {
 
     startTransition(async () => {
       try {
+        const formData = new FormData();
+        formData.append("title", title);
+        formData.append("category", category);
+        formData.append("excerpt", excerpt);
+        formData.append("body", body);
+        formData.append("read_time_minutes", String(readTime));
+        formData.append("status", status);
+        if (coverImage) {
+          formData.append("cover_image", coverImage);
+        }
+
         const res = await apiFetch("/organization/articles", {
           method: "POST",
-          body: JSON.stringify({
-            title,
-            category,
-            excerpt,
-            body,
-            read_time_minutes: readTime,
-            status,
-          }),
+          body: formData,
         });
         const payload = await res.json();
         if (!res.ok) {
@@ -141,6 +184,42 @@ export default function NewArticlePage() {
                 required
               />
             </label>
+
+            <div className="narlit-field">
+              <span>Cover image (optional)</span>
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept={COVER_IMAGE_ACCEPT}
+                onChange={handleCoverChange}
+              />
+              <small style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: 4 }}>
+                JPG, PNG, WEBP, or GIF · up to 4 MB.
+              </small>
+              {coverPreview && (
+                <div style={{ marginTop: 10 }}>
+                  <img
+                    src={coverPreview}
+                    alt="Cover preview"
+                    style={{
+                      width: "100%",
+                      maxHeight: 240,
+                      objectFit: "cover",
+                      borderRadius: 10,
+                      border: "1px solid var(--line)",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="hm-pager-btn"
+                    onClick={removeCover}
+                    style={{ marginTop: 8, padding: "6px 10px" }}
+                  >
+                    Remove image
+                  </button>
+                </div>
+              )}
+            </div>
 
             <label className="narlit-field">
               <span>Estimated read time (minutes)</span>

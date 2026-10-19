@@ -68,6 +68,73 @@ class OrganizationArticleController extends Controller
         ], 201);
     }
 
+    public function show(Request $request, string $publicId): JsonResponse
+    {
+        $article = $this->articleService->findForOrganization(
+            $this->currentOrganization($request),
+            $publicId,
+        );
+
+        if ($article === null) {
+            throw new ApiException('The requested article was not found.', 404);
+        }
+
+        return $this->success('Article retrieved.', [
+            'article' => $this->articleService->detail($article),
+        ]);
+    }
+
+    public function update(Request $request, string $publicId): JsonResponse
+    {
+        $article = $this->articleService->findForOrganization(
+            $this->currentOrganization($request),
+            $publicId,
+        );
+
+        if ($article === null) {
+            throw new ApiException('The requested article was not found.', 404);
+        }
+
+        $data = $request->validate([
+            'title' => ['sometimes', 'string', 'max:180'],
+            'excerpt' => ['sometimes', 'nullable', 'string', 'max:280'],
+            'content' => ['sometimes', 'nullable', 'string'],
+            'body' => ['sometimes', 'nullable', 'string'],
+            'category' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'read_time' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:120'],
+            'read_time_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:120'],
+            'status' => ['sometimes', 'string', 'in:draft,pending_review'],
+            'cover_image' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,webp,gif', 'max:4096'],
+            'remove_cover_image' => ['sometimes', 'boolean'],
+        ]);
+
+        $article = $this->articleService->update(
+            $article,
+            $data,
+            $request->file('cover_image'),
+        );
+
+        return $this->success('Article updated.', [
+            'article' => $this->articleService->detail($article),
+        ]);
+    }
+
+    public function destroy(Request $request, string $publicId): JsonResponse
+    {
+        $article = $this->articleService->findForOrganization(
+            $this->currentOrganization($request),
+            $publicId,
+        );
+
+        if ($article === null) {
+            throw new ApiException('The requested article was not found.', 404);
+        }
+
+        $this->articleService->delete($article);
+
+        return $this->success('Article deleted.');
+    }
+
     protected function currentOrganization(Request $request)
     {
         $organization = $request->user()?->organizationProfile;

@@ -15,6 +15,7 @@ interface RelatedArticle {
   organization: { public_id: string | null; name: string | null };
   read_time_minutes: number | null;
   is_read: boolean;
+  cover_image_url?: string | null;
 }
 
 interface ArticleDetail {
@@ -31,6 +32,7 @@ interface ArticleDetail {
   requires_subscription: boolean;
   has_access: boolean;
   related: RelatedArticle[];
+  cover_image_url: string | null;
 }
 
 interface User { full_name: string; email: string }
@@ -224,6 +226,21 @@ export default function ArticleDetailPage({
         <article className="hm-section" style={{ maxWidth: 760, margin: "0 auto" }}>
           <a href="/articles" className="su-link" style={{ fontSize: "0.85rem" }}>← Back to stories</a>
 
+          {article.cover_image_url && (
+            <img
+              src={article.cover_image_url}
+              alt=""
+              style={{
+                width: "100%",
+                maxHeight: 420,
+                objectFit: "cover",
+                borderRadius: 14,
+                marginTop: 16,
+                border: "1px solid var(--line)",
+              }}
+            />
+          )}
+
           <div className="hm-article-top" style={{ marginTop: 16 }}>
             <span className="hm-article-org">{article.organization.name ?? "NarLit"}</span>
             {article.category && <span className="hm-article-cat">{article.category}</span>}
@@ -328,6 +345,19 @@ export default function ArticleDetailPage({
               <div className="hm-articles" style={{ marginTop: 12 }}>
                 {article.related.slice(0, 3).map((r) => (
                   <article key={r.public_id} className={`hm-article-card${r.is_read ? " hm-article-read" : ""}`}>
+                    {r.cover_image_url && (
+                      <img
+                        src={r.cover_image_url}
+                        alt=""
+                        style={{
+                          width: "100%",
+                          height: 140,
+                          objectFit: "cover",
+                          borderRadius: 10,
+                          marginBottom: 12,
+                        }}
+                      />
+                    )}
                     <div className="hm-article-top">
                       <span className="hm-article-org">{r.organization.name ?? "NarLit"}</span>
                       {r.category && <span className="hm-article-cat">{r.category}</span>}

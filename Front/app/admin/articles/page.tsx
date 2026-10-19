@@ -27,6 +27,7 @@ interface AdminArticle {
   published_at: string | null;
   submitted_at: string | null;
   rejection_reason?: string | null;
+  cover_image_url?: string | null;
 }
 
 interface AdminArticleDetail {
@@ -472,11 +473,41 @@ function AdminArticlesPageContent() {
               {articles.map((a) => (
                 <tr key={a.public_id}>
                   <td>
-                    <div style={{ fontWeight: 700 }}>
-                      {a.title}
-                      {a.is_featured && <span style={{ marginLeft: 6 }}>⭐</span>}
+                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      {a.cover_image_url ? (
+                        <img
+                          src={a.cover_image_url}
+                          alt=""
+                          style={{
+                            width: 56,
+                            height: 40,
+                            objectFit: "cover",
+                            borderRadius: 6,
+                            flexShrink: 0,
+                            border: "1px solid var(--line)",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          aria-hidden
+                          style={{
+                            width: 56,
+                            height: 40,
+                            borderRadius: 6,
+                            flexShrink: 0,
+                            background: "var(--panel)",
+                            border: "1px solid var(--line)",
+                          }}
+                        />
+                      )}
+                      <div>
+                        <div style={{ fontWeight: 700 }}>
+                          {a.title}
+                          {a.is_featured && <span style={{ marginLeft: 6 }}>⭐</span>}
+                        </div>
+                        {a.category && <div style={{ fontSize: "0.72rem", color: "var(--muted)" }}>{a.category}</div>}
+                      </div>
                     </div>
-                    {a.category && <div style={{ fontSize: "0.72rem", color: "var(--muted)" }}>{a.category}</div>}
                   </td>
                   <td>{a.organization.name ?? "—"}</td>
                   <td>{a.category ?? "—"}</td>

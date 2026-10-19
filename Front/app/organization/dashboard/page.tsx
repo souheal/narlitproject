@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { clearToken } from "@/lib/auth";
-import { apiFetch, validateSession } from "@/lib/api";
+import { apiFetch, requireRole } from "@/lib/api";
 import { Skeleton } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
 import OrgScene from "@/components/OrgScene";
@@ -83,12 +82,8 @@ export default function OrgDashboardPage() {
   }
 
   useEffect(() => {
-    validateSession().then((valid) => {
-      if (!valid) {
-        clearToken();
-        window.location.href = "/login";
-        return;
-      }
+    requireRole(["organization"]).then((user) => {
+      if (!user) return;
       setChecking(false);
       loadDashboard();
     });
