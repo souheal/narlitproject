@@ -5,6 +5,7 @@ namespace App\Http\Resources\Admin;
 use App\Models\Article;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 class AdminArticleResource extends JsonResource
 {
@@ -13,9 +14,15 @@ class AdminArticleResource extends JsonResource
         /** @var Article $article */
         $article = $this->resource;
 
+        $metadata = is_array($article->metadata) ? $article->metadata : [];
+        $coverPath = $metadata['cover_image_path'] ?? null;
+
         return [
             'public_id' => $article->public_id,
             'title' => $article->title,
+            'cover_image_url' => is_string($coverPath) && $coverPath !== ''
+                ? Storage::disk('public')->url($coverPath)
+                : null,
             'organization' => [
                 'public_id' => $article->organizationProfile?->public_id,
                 'name' => $article->organizationProfile?->organization_name,

@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { clearToken } from "@/lib/auth";
-import { apiFetch, validateSession } from "@/lib/api";
+import { apiFetch, requireRole } from "@/lib/api";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
 import OrgNav from "@/components/OrgNav";
@@ -80,12 +79,8 @@ export default function OrgArticlesPage() {
   }
 
   useEffect(() => {
-    validateSession().then((valid) => {
-      if (!valid) {
-        clearToken();
-        window.location.href = "/login";
-        return;
-      }
+    requireRole(["organization"]).then((user) => {
+      if (!user) return;
       setChecking(false);
       if (new URLSearchParams(window.location.search).get("deleted")) {
         setNotice("Article deleted.");
@@ -172,10 +167,26 @@ export default function OrgArticlesPage() {
 
           <div className="hm-articles">
             {articles.map((a) => (
+<<<<<<< HEAD
               <article key={a.public_id} className={`hm-article-card${a.cover_image_url ? " oa-card-with-cover" : ""}`}>
                 {a.cover_image_url && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img className="oa-card-cover" src={a.cover_image_url} alt="" loading="lazy" />
+=======
+              <article key={a.public_id} className="hm-article-card">
+                {a.cover_image_url && (
+                  <img
+                    src={a.cover_image_url}
+                    alt=""
+                    style={{
+                      width: "100%",
+                      height: 160,
+                      objectFit: "cover",
+                      borderRadius: 10,
+                      marginBottom: 12,
+                    }}
+                  />
+>>>>>>> 9f279c46a8cdc1bb00b7c8644cb2bac1744a578f
                 )}
                 <div className="hm-article-top">
                   <span className="hm-article-org">{statusOf(a)}</span>

@@ -86,6 +86,11 @@ class User extends Authenticatable
         return $this->hasOne(OrganizationProfile::class);
     }
 
+    public function role(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Role::class);
+    }
+
     public function articleReads(): HasMany
     {
         return $this->hasMany(ArticleRead::class);

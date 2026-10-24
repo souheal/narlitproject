@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { clearToken } from "@/lib/auth";
-import { apiFetch, validateSession } from "@/lib/api";
+import { apiFetch, requireRole } from "@/lib/api";
 import { Skeleton } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
 import OrgNav from "@/components/OrgNav";
@@ -87,12 +86,8 @@ export default function OrgPayoutsPage() {
   }
 
   useEffect(() => {
-    validateSession().then((valid) => {
-      if (!valid) {
-        clearToken();
-        window.location.href = "/login";
-        return;
-      }
+    requireRole(["organization"]).then((user) => {
+      if (!user) return;
       setChecking(false);
       loadPayouts();
     });

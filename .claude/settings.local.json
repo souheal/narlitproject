@@ -67,7 +67,12 @@
       "Bash(php -l Back/app/Http/Controllers/Api/Admin/AdminArticleModerationController.php)",
       "Bash(php -l Back/app/Services/PublicApi/PublicArticleService.php)",
       "Bash(grep -rn *)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(tasklist /FI \"PID eq 40588\")",
+      "Bash(tasklist /FI \"PID eq 47440\")",
+      "Bash(tasklist //FI \"PID eq 40588\")",
+      "Bash(tasklist //FI \"PID eq 47440\")",
+      "Bash(php -l app/Services/Admin/AdminArticleModerationService.php)"
     ]
   }
 }

@@ -18,6 +18,7 @@ interface Article {
   read_time_minutes: number | null;
   is_read: boolean;
   cta_label: string;
+  cover_image_url: string | null;
 }
 
 interface Pagination {
@@ -125,6 +126,20 @@ export default function ArticlesPage() {
           <div className="hm-articles">
             {articles.map((a) => (
               <article key={a.public_id} className={`hm-article-card${a.is_read ? " hm-article-read" : ""}`}>
+                {a.cover_image_url && (
+                  <img
+                    src={a.cover_image_url}
+                    alt=""
+                    className="hm-article-cover"
+                    style={{
+                      width: "100%",
+                      height: 160,
+                      objectFit: "cover",
+                      borderRadius: 10,
+                      marginBottom: 12,
+                    }}
+                  />
+                )}
                 <div className="hm-article-top">
                   <span className="hm-article-org">{a.organization.name ?? "NarLit"}</span>
                   {a.category && <span className="hm-article-cat">{a.category}</span>}

@@ -12,6 +12,7 @@ use App\Support\ArticleMedia;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class UserImpactDashboardService
@@ -167,6 +168,9 @@ class UserImpactDashboardService
             ->where('read_percent', '>=', $readPercent)
             ->exists();
 
+        $metadata = is_array($article->metadata) ? $article->metadata : [];
+        $coverPath = $metadata['cover_image_path'] ?? null;
+
         return [
             'public_id' => $article->public_id,
             'title' => $article->title,
@@ -182,6 +186,9 @@ class UserImpactDashboardService
             'cover_image_url' => ArticleMedia::coverUrl($article),
             'is_read' => $isRead,
             'cta_label' => $isRead ? 'Read again' : 'Read now',
+            'cover_image_url' => is_string($coverPath) && $coverPath !== ''
+                ? Storage::disk('public')->url($coverPath)
+                : null,
         ];
     }
 

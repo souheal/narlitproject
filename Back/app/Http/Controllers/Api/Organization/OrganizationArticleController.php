@@ -82,28 +82,57 @@ class OrganizationArticleController extends Controller
 
     public function show(Request $request, string $publicId): JsonResponse
     {
+<<<<<<< HEAD
         $organization = $this->currentOrganization($request);
 
         return $this->success('Article retrieved.', [
             'article' => $this->articleService->transformDetail(
                 $this->articleService->find($organization, $publicId),
             ),
+=======
+        $article = $this->articleService->findForOrganization(
+            $this->currentOrganization($request),
+            $publicId,
+        );
+
+        if ($article === null) {
+            throw new ApiException('The requested article was not found.', 404);
+        }
+
+        return $this->success('Article retrieved.', [
+            'article' => $this->articleService->detail($article),
+>>>>>>> 9f279c46a8cdc1bb00b7c8644cb2bac1744a578f
         ]);
     }
 
     public function update(Request $request, string $publicId): JsonResponse
     {
+<<<<<<< HEAD
         $organization = $this->currentOrganization($request);
         $article = $this->articleService->find($organization, $publicId);
 
         $data = $request->validate([
             'title' => ['sometimes', 'required', 'string', 'max:180'],
+=======
+        $article = $this->articleService->findForOrganization(
+            $this->currentOrganization($request),
+            $publicId,
+        );
+
+        if ($article === null) {
+            throw new ApiException('The requested article was not found.', 404);
+        }
+
+        $data = $request->validate([
+            'title' => ['sometimes', 'string', 'max:180'],
+>>>>>>> 9f279c46a8cdc1bb00b7c8644cb2bac1744a578f
             'excerpt' => ['sometimes', 'nullable', 'string', 'max:280'],
             'content' => ['sometimes', 'nullable', 'string'],
             'body' => ['sometimes', 'nullable', 'string'],
             'category' => ['sometimes', 'nullable', 'string', 'max:120'],
             'read_time' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:120'],
             'read_time_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:120'],
+<<<<<<< HEAD
             'status' => ['sometimes', 'nullable', 'string', 'in:draft,publish,pending_review'],
             'cover_image' => ['sometimes', 'nullable', ...self::IMAGE_RULE],
             'remove_cover' => ['sometimes', 'boolean'],
@@ -136,11 +165,27 @@ class OrganizationArticleController extends Controller
 
         return $this->success($this->statusMessage($article), [
             'article' => $this->articleService->transformDetail($article),
+=======
+            'status' => ['sometimes', 'string', 'in:draft,pending_review'],
+            'cover_image' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,webp,gif', 'max:4096'],
+            'remove_cover_image' => ['sometimes', 'boolean'],
+        ]);
+
+        $article = $this->articleService->update(
+            $article,
+            $data,
+            $request->file('cover_image'),
+        );
+
+        return $this->success('Article updated.', [
+            'article' => $this->articleService->detail($article),
+>>>>>>> 9f279c46a8cdc1bb00b7c8644cb2bac1744a578f
         ]);
     }
 
     public function destroy(Request $request, string $publicId): JsonResponse
     {
+<<<<<<< HEAD
         $organization = $this->currentOrganization($request);
 
         $this->articleService->delete($this->articleService->find($organization, $publicId));
@@ -157,6 +202,20 @@ class OrganizationArticleController extends Controller
             'pending_review' => 'Article submitted for review.',
             default => 'Draft saved.',
         };
+=======
+        $article = $this->articleService->findForOrganization(
+            $this->currentOrganization($request),
+            $publicId,
+        );
+
+        if ($article === null) {
+            throw new ApiException('The requested article was not found.', 404);
+        }
+
+        $this->articleService->delete($article);
+
+        return $this->success('Article deleted.');
+>>>>>>> 9f279c46a8cdc1bb00b7c8644cb2bac1744a578f
     }
 
     protected function currentOrganization(Request $request)
