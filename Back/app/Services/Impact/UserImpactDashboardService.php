@@ -8,6 +8,7 @@ use App\Models\ImpactTransaction;
 use App\Models\ImpactWallet;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Support\ArticleMedia;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -178,6 +179,7 @@ class UserImpactDashboardService
             ],
             'read_time_minutes' => $article->read_time,
             'published_at' => $article->published_at?->toIso8601String(),
+            'cover_image_url' => ArticleMedia::coverUrl($article),
             'is_read' => $isRead,
             'cta_label' => $isRead ? 'Read again' : 'Read now',
         ];

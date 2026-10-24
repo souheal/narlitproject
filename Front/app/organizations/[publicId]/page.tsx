@@ -7,6 +7,7 @@ import { apiFetch, validateSession } from "@/lib/api";
 import { safeHref, safeImageSrc, EXTERNAL_LINK_REL } from "@/lib/safeUrl";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
+import BackLink from "@/components/BackLink";
 
 interface Article {
   public_id: string;
@@ -158,9 +159,9 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
           <section className="hm-section" style={{ textAlign: "center", maxWidth: 500, margin: "0 auto" }}>
             <h2 className="hm-section-title">Organization unavailable</h2>
             <p className="hm-empty">{error || "This organization does not exist."}</p>
-            <a href="/organizations" className="hm-article-btn" style={{ display: "inline-block", marginTop: 16 }}>
+            <BackLink href="/organizations" className="hm-article-btn" style={{ display: "inline-block", marginTop: 16 }}>
               ← Back to directory
-            </a>
+            </BackLink>
           </section>
         </main>
       </div>
@@ -172,7 +173,7 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
       <MemberNav initials={initials} name={user?.full_name} email={user?.email} />
       <main className="hm-main">
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
-          <a href="/organizations" className="su-link" style={{ fontSize: "0.85rem" }}>← Back to directory</a>
+          <BackLink href="/organizations" className="su-link" style={{ fontSize: "0.85rem" }}>← Back to directory</BackLink>
 
           {/* Hero */}
           <section

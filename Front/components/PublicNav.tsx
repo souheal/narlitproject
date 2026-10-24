@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 
 export default function PublicNav() {
   const [loggedIn, setLoggedIn] = useState(false);
+  const [isOrg, setIsOrg] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     setLoggedIn(document.cookie.includes("auth_token=") || document.cookie.includes("admin_token="));
+    setIsOrg(document.cookie.includes("auth_role=organization"));
     const onScroll = () => setScrolled(window.scrollY > 8);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -87,7 +89,7 @@ export default function PublicNav() {
 
         <div className="hm-nav-auth">
           {loggedIn ? (
-            <a href="/dashboard" className="hm-nav-cta" onClick={closeMobile}>
+            <a href={isOrg ? "/organization/dashboard" : "/dashboard"} className="hm-nav-cta" onClick={closeMobile}>
               Go to dashboard →
             </a>
           ) : (

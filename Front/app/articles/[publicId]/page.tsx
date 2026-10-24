@@ -6,6 +6,7 @@ import { clearToken } from "@/lib/auth";
 import { apiFetch, validateSession } from "@/lib/api";
 import { Skeleton, SkeletonText } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
+import BackLink from "@/components/BackLink";
 
 interface RelatedArticle {
   public_id: string;
@@ -30,6 +31,8 @@ interface ArticleDetail {
   is_bookmarked: boolean;
   requires_subscription: boolean;
   has_access: boolean;
+  cover_image_url?: string | null;
+  images?: string[];
   related: RelatedArticle[];
 }
 
@@ -205,9 +208,9 @@ export default function ArticleDetailPage({
           <section className="hm-section" style={{ maxWidth: 720, margin: "0 auto", textAlign: "center" }}>
             <h2 className="hm-section-title">Article unavailable</h2>
             <p className="hm-empty">{error || "This article does not exist."}</p>
-            <a href="/articles" className="hm-article-btn" style={{ display: "inline-block", marginTop: 16 }}>
+            <BackLink href="/articles" className="hm-article-btn" style={{ display: "inline-block", marginTop: 16 }}>
               ← Back to stories
-            </a>
+            </BackLink>
           </section>
         </main>
       </div>
@@ -222,7 +225,7 @@ export default function ArticleDetailPage({
 
       <main className="hm-main">
         <article className="hm-section" style={{ maxWidth: 760, margin: "0 auto" }}>
-          <a href="/articles" className="su-link" style={{ fontSize: "0.85rem" }}>← Back to stories</a>
+          <BackLink href="/articles" className="su-link" style={{ fontSize: "0.85rem" }}>← Back to stories</BackLink>
 
           <div className="hm-article-top" style={{ marginTop: 16 }}>
             <span className="hm-article-org">{article.organization.name ?? "NarLit"}</span>
@@ -276,6 +279,11 @@ export default function ArticleDetailPage({
             </div>
           </div>
 
+          {article.cover_image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="ar-cover" src={article.cover_image_url} alt="" />
+          )}
+
           {locked ? (
             <div className="hm-panel" style={{ textAlign: "center", padding: 40 }}>
               <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>🔒</div>
@@ -300,6 +308,17 @@ export default function ArticleDetailPage({
               }}
             >
               {article.body ?? article.excerpt}
+            </div>
+          )}
+
+          {!locked && article.images && article.images.length > 0 && (
+            <div className="ar-gallery">
+              {article.images.map((src) => (
+                <a key={src} href={src} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt="" loading="lazy" />
+                </a>
+              ))}
             </div>
           )}
 

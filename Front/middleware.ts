@@ -38,6 +38,7 @@ export function middleware(request: NextRequest) {
   );
 
   const token = request.cookies.get("auth_token")?.value;
+  const isOrg = request.cookies.get("auth_role")?.value === "organization";
   const adminToken = request.cookies.get("admin_token")?.value;
 
   // Admin routes — require admin_token
@@ -50,6 +51,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Logged-in org accounts skip the public landing page
+  if (isOrg && token && pathname === "/") {
+    return NextResponse.redirect(new URL("/organization/dashboard", request.url));
+  }
+
   // Truly public pages — always let through
   if (isTrulyPublic) {
     return NextResponse.next();
@@ -57,7 +63,12 @@ export function middleware(request: NextRequest) {
 
   // Logged-in user tries to open login/signup → send to dashboard
   if (isAuthPage && token) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL(isOrg ? "/organization/dashboard" : "/dashboard", request.url));
+  }
+
+  // Org accounts never land on the member dashboard
+  if (isOrg && token && pathname === "/dashboard") {
+    return NextResponse.redirect(new URL("/organization/dashboard", request.url));
   }
 
   // Auth pages accessible to guests
@@ -76,5 +87,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|logo.png|api/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|logo.png|earth/|places/|api/).*)"],
 };

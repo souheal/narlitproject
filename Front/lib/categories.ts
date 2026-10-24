@@ -18,3 +18,16 @@ export function categoryIcon(category?: string | null): string {
   if (!category) return FALLBACK_CATEGORY_ICON;
   return CATEGORY_ICONS[category] ?? FALLBACK_CATEGORY_ICON;
 }
+
+/** Categories an organization can file an article under. */
+export const ARTICLE_CATEGORIES = [
+  "Civil Rights",
+  "Food Security",
+  "Healthcare",
+  "Education",
+  "Environment",
+  "Housing",
+  "Women & Children",
+  "Refugees",
+  "Other",
+];

@@ -34,14 +34,4 @@ class PublicArticleController extends Controller
             $this->articles->show($publicId, $request->user()),
         );
     }
-
-    public function featured(Request $request): JsonResponse
-    {
-        $limit = (int) $request->query('limit', 3);
-
-        return $this->success(
-            'Featured articles retrieved.',
-            $this->articles->featured($limit),
-        );
-    }
 }

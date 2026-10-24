@@ -5,6 +5,7 @@ namespace App\Services\Admin;
 use App\Exceptions\ApiException;
 use App\Models\Article;
 use App\Models\User;
+use App\Services\Notifications\ArticleNotificationService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -12,6 +13,11 @@ use Illuminate\Support\Facades\DB;
 
 class AdminArticleModerationService
 {
+    public function __construct(
+        protected ArticleNotificationService $notifications,
+    ) {
+    }
+
     public function paginate(Request $request): LengthAwarePaginator
     {
         $query = Article::query()
@@ -83,6 +89,8 @@ class AdminArticleModerationService
                 'to_status' => 'rejected',
             ]);
 
+            $this->notifications->rejected($article, $reason);
+
             return $article->refresh();
         }, 3);
     }
@@ -113,6 +121,8 @@ class AdminArticleModerationService
                 'from_status' => $fromStatus,
                 'to_status' => 'draft',
             ]);
+
+            $this->notifications->changesRequested($article, $reason);
 
             return $article->refresh();
         }, 3);
@@ -263,71 +273,6 @@ class AdminArticleModerationService
         }, 3);
     }
 
-    public function update(User $admin, string $publicId, array $data, Request $request): Article
-    {
-        $article = $this->findActiveArticle($publicId);
-
-        return DB::transaction(function () use ($admin, $article, $data, $request): Article {
-            $changed = [];
-            $update = [];
-
-            foreach (['title', 'excerpt', 'content', 'category'] as $field) {
-                if (! array_key_exists($field, $data)) {
-                    continue;
-                }
-
-                $newValue = $data[$field];
-                $oldValue = $article->{$field};
-
-                if ($newValue === $oldValue) {
-                    continue;
-                }
-
-                $update[$field] = $newValue;
-                $changed[$field] = [
-                    'from' => is_string($oldValue) && strlen($oldValue) > 200
-                        ? substr($oldValue, 0, 200).'…'
-                        : $oldValue,
-                    'to' => is_string($newValue) && strlen($newValue) > 200
-                        ? substr($newValue, 0, 200).'…'
-                        : $newValue,
-                ];
-            }
-
-            if ($update !== []) {
-                $article->forceFill($update)->save();
-            }
-
-            $this->log($admin, $article, 'article.edited', $request, [
-                'changed_fields' => array_keys($changed),
-                'changes' => $changed,
-                'edit_note' => $data['edit_note'] ?? null,
-            ]);
-
-            return $article->refresh();
-        }, 3);
-    }
-
-    public function destroy(User $admin, string $publicId, string $reason, Request $request): void
-    {
-        $article = Article::withTrashed()->where('public_id', $publicId)->first();
-
-        if ($article === null) {
-            throw new ApiException('Article was not found.', 404);
-        }
-
-        DB::transaction(function () use ($admin, $article, $reason, $request): void {
-            $this->log($admin, $article, 'article.deleted', $request, [
-                'reason' => $reason,
-                'title' => $article->title,
-                'status_before_delete' => $article->status,
-                'was_archived' => $article->trashed(),
-            ]);
-
-            $article->forceDelete();
-        }, 3);
-    }
-
     protected function publishArticle(User $admin, Article $article, string $action, Request $request): Article
     {
         return DB::transaction(function () use ($admin, $article, $action, $request): Article {
@@ -342,6 +287,8 @@ class AdminArticleModerationService
                 'from_status' => $fromStatus,
                 'to_status' => 'published',
             ]);
+
+            $this->notifications->published($article);
 
             return $article->refresh();
         }, 3);

@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Admin;
 
 use App\Models\Article;
+use App\Support\ArticleMedia;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
@@ -35,7 +36,13 @@ class AdminArticleDetailResource extends JsonResource
                     'email' => $article->organizationProfile?->user?->email,
                 ],
             ],
-            'images' => $metadata['images'] ?? [],
+            // cover first, then the gallery, then any legacy absolute URLs
+            'images' => array_values(array_unique(array_filter([
+                ArticleMedia::coverUrl($article),
+                ...ArticleMedia::galleryUrls($article),
+                ...(is_array($metadata['images'] ?? null) ? $metadata['images'] : []),
+            ]))),
+            'cover_image_url' => ArticleMedia::coverUrl($article),
             'metadata' => $metadata,
             'read_statistics' => [
                 'total_reads' => (int) $article->total_reads,

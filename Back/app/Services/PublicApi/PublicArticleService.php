@@ -8,7 +8,7 @@ use App\Models\ArticleRead;
 use App\Models\Bookmark;
 use App\Models\Subscription;
 use App\Models\User;
-use Illuminate\Support\Facades\Storage;
+use App\Support\ArticleMedia;
 
 class PublicArticleService
 {
@@ -137,8 +137,6 @@ class PublicArticleService
     protected function transform(Article $article): array
     {
         $organization = $article->organizationProfile;
-        $metadata = is_array($article->metadata) ? $article->metadata : [];
-        $coverPath = $metadata['cover_image_path'] ?? null;
 
         return [
             'public_id' => $article->public_id,
@@ -157,7 +155,8 @@ class PublicArticleService
             'published_at' => $article->published_at?->toIso8601String(),
             'total_reads' => (int) $article->total_reads,
             'total_unique_reads' => (int) $article->total_unique_reads,
-            'cover_image_url' => $coverPath ? Storage::url($coverPath) : null,
+            'cover_image_url' => ArticleMedia::coverUrl($article),
+            'images' => ArticleMedia::galleryUrls($article),
         ];
     }
 }

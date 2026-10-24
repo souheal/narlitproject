@@ -1,7 +1,9 @@
 "use client";
 
 import { FormEvent, useState, useTransition } from "react";
-import { saveToken, saveAdminToken } from "@/lib/auth";
+import LoginHero from "@/components/LoginHero";
+import NetworkBackground from "@/components/NetworkBackground";
+import { saveToken, saveAdminToken, saveRole, clearRole } from "@/lib/auth";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1";
@@ -12,6 +14,7 @@ export default function LoginPage() {
   const [step, setStep] = useState<Step>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaExpiresAt, setMfaExpiresAt] = useState("");
   const [error, setError] = useState("");
@@ -58,16 +61,18 @@ export default function LoginPage() {
           const adminCheck = await fetch(`${API_BASE_URL}/admin/organizations?per_page=1`, { headers: authHeaders });
           if (adminCheck.ok) {
             saveAdminToken(token);
-            window.location.href = "/admin/dashboard";
+            window.location.replace("/admin/dashboard");
             return;
           }
 
           const orgCheck = await fetch(`${API_BASE_URL}/organization/dashboard`, { headers: authHeaders });
           saveToken(token);
           if (orgCheck.ok) {
-            window.location.href = "/organization/dashboard";
+            saveRole("organization");
+            window.location.replace("/organization/dashboard");
           } else {
-            window.location.href = "/dashboard";
+            clearRole();
+            window.location.replace("/dashboard");
           }
         }
       } catch (err) {
@@ -105,7 +110,7 @@ export default function LoginPage() {
         if (payload?.data?.token) {
           saveToken(payload.data.token);
         }
-        window.location.href = "/dashboard";
+        window.location.replace("/dashboard");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
@@ -137,6 +142,8 @@ export default function LoginPage() {
 
   return (
     <main className="login-shell" suppressHydrationWarning>
+      <LoginHero />
+      <NetworkBackground className="nb-root" />
       <div className="narlit-backdrop narlit-backdrop-one" suppressHydrationWarning />
       <div className="narlit-backdrop narlit-backdrop-two" suppressHydrationWarning />
 
@@ -153,6 +160,8 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
+
+        {step === "login" && <p className="login-sub">Pick up where your last story left off.</p>}
 
         {error  && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
         {status && <p className="narlit-feedback narlit-feedback-success">{status}</p>}
@@ -173,14 +182,24 @@ export default function LoginPage() {
 
             <label className="narlit-field">
               <span>Password</span>
-              <input
-                type="password"
-                value={password}
-                autoComplete="current-password"
-                placeholder="••••••••"
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="login-pw">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="login-pw-toggle"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
             </label>
 
             <button

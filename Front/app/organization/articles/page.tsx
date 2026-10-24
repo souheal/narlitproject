@@ -7,6 +7,7 @@ import { Skeleton, SkeletonText } from "@/components/Skeleton";
 import { BrandLoader } from "@/components/BrandLoader";
 import OrgNav from "@/components/OrgNav";
 import ArticlesScene from "@/components/ArticlesScene";
+import DeleteArticleDialog from "@/components/DeleteArticleDialog";
 
 interface OrgArticle {
   public_id: string;
@@ -14,11 +15,13 @@ interface OrgArticle {
   excerpt: string | null;
   category: string | null;
   status: string;
+  rejection_reason: string | null;
   published_at: string | null;
   read_time_minutes: number | null;
   total_reads: number;
   total_unique_reads: number;
   total_points_generated: number;
+  cover_image_url: string | null;
 }
 
 interface Pagination {
@@ -29,12 +32,18 @@ interface Pagination {
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Draft",
-  pending_review: "Pending review",
+  pending_review: "Pending approval",
   approved: "Approved",
-  rejected: "Rejected",
+  rejected: "Not approved",
   published: "Published",
   archived: "Archived",
 };
+
+/** A draft an admin sent back carries the reason in rejection_reason. */
+function statusOf(a: OrgArticle): string {
+  if (a.status === "draft" && a.rejection_reason) return "Changes requested";
+  return STATUS_LABEL[a.status] ?? a.status;
+}
 
 export default function OrgArticlesPage() {
   const [articles, setArticles] = useState<OrgArticle[]>([]);
@@ -43,6 +52,8 @@ export default function OrgArticlesPage() {
   const [checking, setChecking] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [deleting, setDeleting] = useState<OrgArticle | null>(null);
 
   async function loadArticles(target: number) {
     setLoading(true);
@@ -76,6 +87,10 @@ export default function OrgArticlesPage() {
         return;
       }
       setChecking(false);
+      if (new URLSearchParams(window.location.search).get("deleted")) {
+        setNotice("Article deleted.");
+        window.history.replaceState(null, "", "/organization/articles");
+      }
       loadArticles(1);
     });
   }, []);
@@ -118,12 +133,13 @@ export default function OrgArticlesPage() {
         <section className="hm-section">
           <div className="hm-section-header">
             <h2 className="hm-section-title">All articles</h2>
-            <a href="/organization/articles/new" className="hm-article-btn" style={{ display: "inline-block" }}>
+            <a href="/organization/articles/new" className="hm-article-btn" style={{ display: "inline-block", marginRight: 25 }}>
               + New article
             </a>
           </div>
 
           {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
+          {notice && <p className="narlit-feedback narlit-feedback-success" style={{ marginBottom: 16 }}>{notice}</p>}
 
           {loading && articles.length === 0 && (
             <div className="hm-articles" aria-busy="true" aria-label="Loading articles">
@@ -150,26 +166,38 @@ export default function OrgArticlesPage() {
           {!loading && articles.length === 0 && !error && (
             <p className="hm-empty">
               You haven&apos;t submitted any articles yet.{" "}
-              <a href="/organization/articles/new" className="su-link">Submit your first one</a>.
+              <a href="/organization/articles/new" className="su-link">Write your first one</a>.
             </p>
           )}
 
           <div className="hm-articles">
             {articles.map((a) => (
-              <article key={a.public_id} className="hm-article-card">
+              <article key={a.public_id} className={`hm-article-card${a.cover_image_url ? " oa-card-with-cover" : ""}`}>
+                {a.cover_image_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="oa-card-cover" src={a.cover_image_url} alt="" loading="lazy" />
+                )}
                 <div className="hm-article-top">
-                  <span className="hm-article-org">{STATUS_LABEL[a.status] ?? a.status}</span>
+                  <span className="hm-article-org">{statusOf(a)}</span>
                   {a.category && <span className="hm-article-cat">{a.category}</span>}
                 </div>
                 <h3 className="hm-article-title">{a.title}</h3>
+                {a.rejection_reason && (a.status === "draft" || a.status === "rejected") && (
+                  <p className="oa-list-note">Admin feedback: {a.rejection_reason}</p>
+                )}
                 <p className="hm-article-excerpt">{a.excerpt}</p>
                 <div className="hm-article-footer">
                   <span className="hm-article-time">
                     {a.total_reads} reads · {a.total_unique_reads} unique
                   </span>
-                  <a href={`/organization/articles/${a.public_id}`} className="hm-article-btn">
-                    Manage →
-                  </a>
+                  <div className="oa-card-actions">
+                    <button type="button" className="hm-pager-btn" onClick={() => setDeleting(a)}>
+                      Delete
+                    </button>
+                    <a href={`/organization/articles/${a.public_id}`} className="hm-article-btn">
+                      Edit →
+                    </a>
+                  </div>
                 </div>
               </article>
             ))}
@@ -200,6 +228,21 @@ export default function OrgArticlesPage() {
           )}
         </section>
       </main>
+
+      {deleting && (
+        <DeleteArticleDialog
+          article={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setDeleting(null);
+            setNotice("Article deleted.");
+            // Step back a page if that was the last article on this one.
+            const target = articles.length === 1 && page > 1 ? page - 1 : page;
+            setPage(target);
+            loadArticles(target);
+          }}
+        />
+      )}
     </div>
   );
 }

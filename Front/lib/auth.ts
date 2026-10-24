@@ -21,7 +21,11 @@ function deleteCookie(name: string) {
 // User
 export const saveToken  = (token: string) => setCookie("auth_token", token);
 export const getToken   = ()               => getCookie("auth_token");
-export const clearToken = ()               => deleteCookie("auth_token");
+export const clearToken = () => { deleteCookie("auth_token"); deleteCookie("auth_role"); };
+
+// Remembers org accounts so middleware can send them to the org area, not the member one
+export const saveRole = (role: string) => setCookie("auth_role", role);
+export const clearRole = () => deleteCookie("auth_role");
 
 // Admin
 export const saveAdminToken  = (token: string) => setCookie("admin_token", token);

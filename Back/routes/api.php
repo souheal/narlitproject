@@ -134,6 +134,9 @@ Route::prefix('v1')->group(function () {
         Route::get('/dashboard', [OrganizationDashboardController::class, 'show']);
         Route::get('/articles', [OrganizationArticleController::class, 'index']);
         Route::post('/articles', [OrganizationArticleController::class, 'store']);
+        Route::get('/articles/{publicId}', [OrganizationArticleController::class, 'show']);
+        Route::patch('/articles/{publicId}', [OrganizationArticleController::class, 'update']);
+        Route::delete('/articles/{publicId}', [OrganizationArticleController::class, 'destroy']);
         Route::get('/payouts', [OrganizationPayoutController::class, 'index']);
         Route::post('/stripe-connect/onboarding', [OrganizationStripeConnectController::class, 'onboarding']);
         Route::get('/stripe-connect/status', [OrganizationStripeConnectController::class, 'status']);

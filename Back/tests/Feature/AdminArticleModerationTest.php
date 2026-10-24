@@ -357,6 +357,7 @@ class AdminArticleModerationTest extends TestCase
 
     private function createTestSchema(): void
     {
+        Schema::dropIfExists('notifications');
         Schema::dropIfExists('admin_logs');
         Schema::dropIfExists('article_reads');
         Schema::dropIfExists('articles');
@@ -464,6 +465,20 @@ class AdminArticleModerationTest extends TestCase
             $table->text('user_agent')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamp('created_at')->useCurrent();
+        });
+
+        Schema::create('notifications', function (Blueprint $table): void {
+            $table->id();
+            $table->uuid('public_id')->unique();
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $table->string('type', 80);
+            $table->string('title');
+            $table->text('body')->nullable();
+            $table->string('action_url')->nullable();
+            $table->string('action_label', 80)->nullable();
+            $table->string('icon', 80)->nullable();
+            $table->timestamp('read_at')->nullable();
+            $table->timestamps();
         });
     }
 

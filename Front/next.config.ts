@@ -23,7 +23,7 @@ const cspDirectives: Record<string, string[]> = {
     ...stripeCsp,
   ],
   "style-src": ["'self'", "'unsafe-inline'"], // Next.js + inline styles across the app
-  "img-src": ["'self'", "data:", "blob:", "https:"],
+  "img-src": ["'self'", "data:", "blob:", "https:", apiOrigin],
   "font-src": ["'self'", "data:"],
   "connect-src": [
     "'self'",

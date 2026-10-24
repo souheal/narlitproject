@@ -10,7 +10,10 @@ return [
         explode(',', env('CORS_ALLOWED_ORIGINS', env('FRONTEND_URL', 'http://localhost:3000')))
     )),
 
-    'allowed_origins_patterns' => [],
+    // In local dev, Next.js may fall back to 3001, 3002... when 3000 is taken.
+    'allowed_origins_patterns' => env('APP_ENV') === 'local'
+        ? ['#^http://(localhost|127\.0\.0\.1):\d+$#']
+        : [],
 
     'allowed_headers' => ['*'],
 
