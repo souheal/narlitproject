@@ -121,7 +121,9 @@ class UserImpactDashboardService
 
             $transaction = null;
 
-            if ($completed) {
+            // Only credit the nonprofit once per unique completed read.
+            // Re-reading the same article shouldn't inflate the funding share.
+            if ($completed && ! $alreadyRead) {
                 $transaction = ImpactTransaction::query()->create([
                     'public_id' => (string) Str::uuid(),
                     'user_id' => $user->id,

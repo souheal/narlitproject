@@ -42,6 +42,38 @@ interface OrgDetail {
 
 interface User { full_name: string; email: string }
 
+/** The backend's public organization payload differs from the shape this page was built against. */
+function normalizeOrg(raw: Record<string, unknown>, articles: Article[]): OrgDetail {
+  const name = (raw.organization_name as string | undefined) ?? (raw.name as string | undefined) ?? "";
+  const mission =
+    (raw.mission_statement as string | null | undefined) ??
+    (raw.description as string | null | undefined) ??
+    null;
+  return {
+    public_id: (raw.public_id as string) ?? "",
+    organization_name: name,
+    mission_statement: mission,
+    description: (raw.description as string | null | undefined) ?? mission,
+    category: (raw.category as string | null | undefined) ?? null,
+    city: (raw.city as string | null | undefined) ?? null,
+    country: (raw.country as string | null | undefined) ?? null,
+    website: (raw.website as string | null | undefined) ?? null,
+    logo_url: (raw.logo_url as string | null | undefined) ?? null,
+    founded_year: (raw.founded_year as number | null | undefined) ?? null,
+    total_articles:
+      (raw.total_articles as number | undefined) ??
+      (raw.published_articles_count as number | undefined) ??
+      articles.length,
+    total_supporters: (raw.total_supporters as number | undefined) ?? 0,
+    total_reads: (raw.total_reads as number | undefined) ?? 0,
+    total_donations_received: (raw.total_donations_received as string | undefined) ?? "0.00",
+    currency: (raw.currency as string | undefined) ?? "USD",
+    is_supported_by_me: (raw.is_supported_by_me as boolean | undefined) ?? false,
+    my_donation_to_them: (raw.my_donation_to_them as string | undefined) ?? "0.00",
+    articles,
+  };
+}
+
 export default function OrgDetailPage({ params }: { params: Promise<{ publicId: string }> }) {
   const { publicId } = use(params);
   const [user, setUser] = useState<User | null>(null);
@@ -60,8 +92,13 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
       const meData = await meRes.json();
       const orgData = await orgRes.json();
       setUser(meData.data?.user ?? meData.data ?? null);
-      if (orgRes.ok) setOrg(orgData.data?.organization ?? null);
-      else setError(orgData?.message ?? "Organization not found.");
+      if (orgRes.ok) {
+        const raw = orgData.data?.organization ?? null;
+        const articles = orgData.data?.articles ?? [];
+        setOrg(raw ? normalizeOrg(raw, articles) : null);
+      } else {
+        setError(orgData?.message ?? "Organization not found.");
+      }
     } catch { setError("Failed to load organization."); }
     setLoading(false);
   }
@@ -194,7 +231,7 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: "white", fontWeight: 900, fontSize: "1.8rem",
                   }}>
-                    {org.organization_name.slice(0, 2).toUpperCase()}
+                    {(org.organization_name ?? "").slice(0, 2).toUpperCase()}
                   </div>
                 )}
                 <div>

@@ -44,6 +44,21 @@ function statusOf(a: OrgArticle): string {
   return STATUS_LABEL[a.status] ?? a.status;
 }
 
+function submittedMessage(status: string): string {
+  switch (status) {
+    case "pending_review":
+      return "Waiting for approval. The NarLit team is reviewing this article. You'll get a notification as soon as it's approved or sent back.";
+    case "published":
+      return "Article published. Readers can see it now.";
+    case "draft":
+      return "Draft saved.";
+    case "rejected":
+      return "Changes saved.";
+    default:
+      return "Changes saved.";
+  }
+}
+
 export default function OrgArticlesPage() {
   const [articles, setArticles] = useState<OrgArticle[]>([]);
   const [meta, setMeta] = useState<Pagination | null>(null);
@@ -82,13 +97,27 @@ export default function OrgArticlesPage() {
     requireRole(["organization"]).then((user) => {
       if (!user) return;
       setChecking(false);
-      if (new URLSearchParams(window.location.search).get("deleted")) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("deleted")) {
         setNotice("Article deleted.");
         window.history.replaceState(null, "", "/organization/articles");
+      } else {
+        const submitted = params.get("submitted");
+        if (submitted) {
+          setNotice(submittedMessage(submitted));
+          window.history.replaceState(null, "", "/organization/articles");
+        }
       }
       loadArticles(1);
     });
   }, []);
+
+  // Auto-dismiss the notice after 20 seconds. The visual bar runs via CSS.
+  useEffect(() => {
+    if (!notice) return;
+    const id = window.setTimeout(() => setNotice(""), 20000);
+    return () => window.clearTimeout(id);
+  }, [notice]);
 
   function goToPage(target: number) {
     if (!meta) return;
@@ -134,7 +163,35 @@ export default function OrgArticlesPage() {
           </div>
 
           {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}
-          {notice && <p className="narlit-feedback narlit-feedback-success" style={{ marginBottom: 16 }}>{notice}</p>}
+          {notice && (
+            <div
+              role="status"
+              className="narlit-feedback narlit-feedback-success"
+              style={{ marginBottom: 16, position: "relative", overflow: "hidden" }}
+            >
+              <span>{notice}</span>
+              <span
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  bottom: 0,
+                  height: 3,
+                  width: "100%",
+                  background: "currentColor",
+                  opacity: 0.35,
+                  transformOrigin: "left center",
+                  animation: "narlitNoticeCountdown 20s linear forwards",
+                }}
+              />
+              <style>{`
+                @keyframes narlitNoticeCountdown {
+                  from { transform: scaleX(0); }
+                  to   { transform: scaleX(1); }
+                }
+              `}</style>
+            </div>
+          )}
 
           {loading && articles.length === 0 && (
             <div className="hm-articles" aria-busy="true" aria-label="Loading articles">
@@ -167,26 +224,10 @@ export default function OrgArticlesPage() {
 
           <div className="hm-articles">
             {articles.map((a) => (
-<<<<<<< HEAD
               <article key={a.public_id} className={`hm-article-card${a.cover_image_url ? " oa-card-with-cover" : ""}`}>
                 {a.cover_image_url && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img className="oa-card-cover" src={a.cover_image_url} alt="" loading="lazy" />
-=======
-              <article key={a.public_id} className="hm-article-card">
-                {a.cover_image_url && (
-                  <img
-                    src={a.cover_image_url}
-                    alt=""
-                    style={{
-                      width: "100%",
-                      height: 160,
-                      objectFit: "cover",
-                      borderRadius: 10,
-                      marginBottom: 12,
-                    }}
-                  />
->>>>>>> 9f279c46a8cdc1bb00b7c8644cb2bac1744a578f
                 )}
                 <div className="hm-article-top">
                   <span className="hm-article-org">{statusOf(a)}</span>

@@ -3,7 +3,7 @@
 import { FormEvent, useState, useTransition } from "react";
 import LoginHero from "@/components/LoginHero";
 import NetworkBackground from "@/components/NetworkBackground";
-import { saveToken, saveAdminToken, saveRole, clearRole } from "@/lib/auth";
+import { saveToken, saveAdminToken, saveRole, clearRole, cacheUser } from "@/lib/auth";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1";
@@ -69,9 +69,37 @@ export default function LoginPage() {
           saveToken(token);
           if (orgCheck.ok) {
             saveRole("organization");
+            // Pre-populate the profile cache so the next page's avatar renders
+            // correct initials on first paint, not the generic "OR" fallback.
+            try {
+              const orgPayload = await orgCheck.json();
+              const org = orgPayload?.data?.dashboard?.organization;
+              if (org) {
+                cacheUser({
+                  full_name: org.organization_name,
+                  email: org.email,
+                  role_name: "organization",
+                });
+              }
+            } catch { /* cache is best-effort */ }
             window.location.replace("/organization/dashboard");
           } else {
             clearRole();
+            // Same pre-cache for member users.
+            try {
+              const meRes = await fetch(`${API_BASE_URL}/auth/me`, { headers: authHeaders });
+              if (meRes.ok) {
+                const mePayload = await meRes.json();
+                const u = mePayload?.data?.user ?? mePayload?.data;
+                if (u) {
+                  cacheUser({
+                    full_name: u.full_name,
+                    email: u.email,
+                    role_name: u.role_name ?? "user",
+                  });
+                }
+              }
+            } catch { /* cache is best-effort */ }
             window.location.replace("/dashboard");
           }
         }

@@ -29,9 +29,14 @@ class PublicArticleController extends Controller
 
     public function show(Request $request, string $publicId): JsonResponse
     {
+        // This endpoint is public (guests see the paywall preview), but if a
+        // bearer token is attached we resolve the user through Sanctum so
+        // active subscribers get the full article.
+        $user = $request->user() ?? auth('sanctum')->user();
+
         return $this->success(
             'Article retrieved.',
-            $this->articles->show($publicId, $request->user()),
+            $this->articles->show($publicId, $user),
         );
     }
 }

@@ -1,4 +1,4 @@
-import { getToken, clearToken, getAdminToken, clearAdminToken } from "@/lib/auth";
+import { getToken, clearToken, getAdminToken, clearAdminToken, cacheUser } from "@/lib/auth";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1";
@@ -65,7 +65,15 @@ export async function fetchCurrentUser(): Promise<AuthenticatedUser | null> {
     const res = await apiFetch("/auth/me");
     if (!res.ok) return null;
     const payload = await res.json();
-    return payload?.data?.user ?? payload?.data ?? null;
+    const user: AuthenticatedUser | null = payload?.data?.user ?? payload?.data ?? null;
+    if (user) {
+      cacheUser({
+        full_name: typeof user.full_name === "string" ? user.full_name : undefined,
+        email: typeof user.email === "string" ? user.email : undefined,
+        role_name: user.role_name,
+      });
+    }
+    return user;
   } catch {
     return null;
   }

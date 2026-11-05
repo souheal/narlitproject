@@ -140,11 +140,9 @@ Route::prefix('v1')->group(function () {
         Route::get('/articles', [OrganizationArticleController::class, 'index']);
         Route::post('/articles', [OrganizationArticleController::class, 'store']);
         Route::get('/articles/{publicId}', [OrganizationArticleController::class, 'show']);
-<<<<<<< HEAD
-        Route::patch('/articles/{publicId}', [OrganizationArticleController::class, 'update']);
-=======
-        Route::post('/articles/{publicId}', [OrganizationArticleController::class, 'update']);
->>>>>>> 9f279c46a8cdc1bb00b7c8644cb2bac1744a578f
+        // Accept both POST (with Laravel's _method=PATCH spoof for multipart uploads)
+        // and PATCH (for plain JSON updates).
+        Route::match(['post', 'patch'], '/articles/{publicId}', [OrganizationArticleController::class, 'update']);
         Route::delete('/articles/{publicId}', [OrganizationArticleController::class, 'destroy']);
         Route::get('/payouts', [OrganizationPayoutController::class, 'index']);
         Route::post('/stripe-connect/onboarding', [OrganizationStripeConnectController::class, 'onboarding']);

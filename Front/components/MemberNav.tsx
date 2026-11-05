@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { clearToken } from "@/lib/auth";
+import { clearToken, cacheUser, getCachedUser } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { BellIcon, CheckIcon, CloseIcon, MenuIcon, SearchIcon } from "@/components/icons";
 import { safeHref } from "@/lib/safeUrl";
@@ -79,9 +79,32 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+function initialsOf(fullName: string): string {
+  return fullName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("");
+}
+
 export default function MemberNav({ initials, name, email }: Props) {
   const pathname = usePathname();
   const [openMenu, setOpenMenu] = useState<null | "avatar" | "search" | "notif" | "mobile">(null);
+
+  // Fall back to cached profile so the avatar renders correct initials on first paint
+  // during page navigation (parent fetches /auth/me async; we fill the gap).
+  const cached = typeof window !== "undefined" ? getCachedUser() : null;
+  const effectiveName = name ?? cached?.full_name;
+  const effectiveEmail = email ?? cached?.email;
+  const effectiveInitials = initials ?? (effectiveName ? initialsOf(effectiveName) : undefined);
+
+  // Keep the cache fresh when a parent page supplies a profile.
+  useEffect(() => {
+    if (name || email) {
+      cacheUser({ full_name: name, email, role_name: "user" });
+    }
+  }, [name, email]);
 
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifs, setNotifs] = useState<NotifItem[]>([]);
@@ -454,14 +477,19 @@ export default function MemberNav({ initials, name, email }: Props) {
             onClick={() => setOpenMenu(openMenu === "avatar" ? null : "avatar")}
             aria-label="Account menu"
             aria-expanded={openMenu === "avatar"}
-            style={{ border: 0 }}
+            style={{
+              border: 0,
+              ...(effectiveInitials
+                ? {}
+                : { background: "var(--panel)", color: "transparent" }),
+            }}
           >
-            {initials ?? "NL"}
+            {effectiveInitials ?? "·"}
           </button>
           {openMenu === "avatar" && (
             <div className="hm-nav-dropdown">
-              {name && <div className="hm-nav-dd-name">{name}</div>}
-              {email && <div className="hm-nav-dd-email">{email}</div>}
+              {effectiveName && <div className="hm-nav-dd-name">{effectiveName}</div>}
+              {effectiveEmail && <div className="hm-nav-dd-email">{effectiveEmail}</div>}
               <div className="hm-nav-dd-divider" />
               {DROPDOWN_LINKS.map((l) => (
                 <a key={l.href} href={l.href} className="hm-nav-dd-item">

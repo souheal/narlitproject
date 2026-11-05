@@ -35,7 +35,6 @@ interface ArticleDetail {
   cover_image_url?: string | null;
   images?: string[];
   related: RelatedArticle[];
-  cover_image_url: string | null;
 }
 
 interface User { full_name: string; email: string }
@@ -55,6 +54,9 @@ export default function ArticleDetailPage({
   const [markedRead, setMarkedRead] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bookmarking, setBookmarking] = useState(false);
+  // Full body stays hidden behind a "Read full article" CTA until the reader
+  // explicitly opts in. That click is what credits the nonprofit's share.
+  const [bodyUnlocked, setBodyUnlocked] = useState(false);
   const startedAt = useRef<number>(Date.now());
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
@@ -87,13 +89,21 @@ export default function ArticleDetailPage({
     });
   }, [publicId]);
 
+  // Once we know the article, auto-unlock the body if the reader has already
+  // paid for it (previous completed read) — no need to make them click again.
   useEffect(() => {
-    if (!article || !article.has_access || markedRead) return;
+    if (article?.is_read) setBodyUnlocked(true);
+  }, [article?.is_read]);
+
+  // Reading-time counter only runs while the body is actually visible.
+  useEffect(() => {
+    if (!article || !article.has_access || !bodyUnlocked || markedRead) return;
+    startedAt.current = Date.now();
     const interval = setInterval(() => {
       setReadingSeconds(Math.floor((Date.now() - startedAt.current) / 1000));
     }, 1000);
     return () => clearInterval(interval);
-  }, [article, markedRead]);
+  }, [article, bodyUnlocked, markedRead]);
 
   async function markRead(readPercent: number) {
     if (!article || markedRead || saving) return;
@@ -117,21 +127,20 @@ export default function ArticleDetailPage({
     }
   }
 
-  useEffect(() => {
-    if (!article || !article.has_access || markedRead) return;
-    function onScroll() {
-      if (!bodyRef.current) return;
-      const rect = bodyRef.current.getBoundingClientRect();
-      const total = bodyRef.current.scrollHeight;
-      const visibleBottom = window.innerHeight - rect.top;
-      const percent = Math.max(0, Math.min(100, Math.round((visibleBottom / total) * 100)));
-      if (percent >= 80 && !markedRead) {
-        markRead(percent);
-      }
+  /** The reader confirms they want to open the full article. */
+  async function unlockAndRead() {
+    if (!article || !article.has_access || saving) return;
+    setBodyUnlocked(true);
+    // Fire-and-forget the credit; the UI opens immediately either way.
+    // The backend ignores repeat credits for the same article (see
+    // UserImpactDashboardService::recordRead).
+    if (!article.is_read) {
+      void markRead(100);
     }
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [article, markedRead]);
+  }
+
+  // The read is now triggered explicitly by the unlock CTA, so no scroll tracking.
+  // (A scroll-based auto-mark would make it feel like the reader is paying by accident.)
 
   async function toggleBookmark() {
     if (!article || bookmarking) return;
@@ -283,16 +292,6 @@ export default function ArticleDetailPage({
               >
                 🔗 Share
               </button>
-              {article.has_access && !markedRead && !article.is_read && (
-                <button
-                  type="button"
-                  className="hm-article-btn"
-                  onClick={() => markRead(100)}
-                  disabled={saving}
-                >
-                  {saving ? "Saving…" : "Mark as read"}
-                </button>
-              )}
             </div>
           </div>
 
@@ -313,6 +312,32 @@ export default function ArticleDetailPage({
                 Start your subscription →
               </a>
             </div>
+          ) : !bodyUnlocked ? (
+            <div className="hm-panel" style={{ textAlign: "center", padding: 32 }}>
+              <p
+                className="hm-article-excerpt"
+                style={{ fontSize: "1.05rem", lineHeight: 1.65, maxWidth: 540, margin: "0 auto 20px" }}
+              >
+                {article.excerpt || "Open this story to read it in full."}
+              </p>
+              <button
+                type="button"
+                className="hm-article-btn"
+                onClick={unlockAndRead}
+                disabled={saving}
+                style={{ display: "inline-block" }}
+              >
+                {saving ? "Opening…" : "Read full article →"}
+              </button>
+              {!article.is_read && (
+                <p
+                  className="hm-panel-sub"
+                  style={{ fontSize: "0.8rem", marginTop: 12, color: "var(--muted)" }}
+                >
+                  Opening this story credits a small share of your subscription to {article.organization.name ?? "this nonprofit"}.
+                </p>
+              )}
+            </div>
           ) : (
             <div
               ref={bodyRef}
@@ -328,7 +353,7 @@ export default function ArticleDetailPage({
             </div>
           )}
 
-          {!locked && article.images && article.images.length > 0 && (
+          {!locked && bodyUnlocked && article.images && article.images.length > 0 && (
             <div className="ar-gallery">
               {article.images.map((src) => (
                 <a key={src} href={src} target="_blank" rel="noopener noreferrer">
