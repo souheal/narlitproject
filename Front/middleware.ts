@@ -44,7 +44,7 @@ export function middleware(request: NextRequest) {
   // Admin routes — require admin_token
   if (pathname.startsWith("/admin")) {
     if (!adminToken) {
-      const loginUrl = new URL("/login", request.url);
+      const loginUrl = new URL("/login", request.nextUrl);
       loginUrl.searchParams.set("next", pathname);
       return NextResponse.redirect(loginUrl);
     }
@@ -53,7 +53,7 @@ export function middleware(request: NextRequest) {
 
   // Logged-in org accounts skip the public landing page
   if (isOrg && token && pathname === "/") {
-    return NextResponse.redirect(new URL("/organization/dashboard", request.url));
+    return NextResponse.redirect(new URL("/organization/dashboard", request.nextUrl));
   }
 
   // Truly public pages — always let through
@@ -63,12 +63,12 @@ export function middleware(request: NextRequest) {
 
   // Logged-in user tries to open login/signup → send to dashboard
   if (isAuthPage && token) {
-    return NextResponse.redirect(new URL(isOrg ? "/organization/dashboard" : "/dashboard", request.url));
+    return NextResponse.redirect(new URL(isOrg ? "/organization/dashboard" : "/dashboard", request.nextUrl));
   }
 
   // Org accounts never land on the member dashboard
   if (isOrg && token && pathname === "/dashboard") {
-    return NextResponse.redirect(new URL("/organization/dashboard", request.url));
+    return NextResponse.redirect(new URL("/organization/dashboard", request.nextUrl));
   }
 
   // Auth pages accessible to guests
@@ -78,7 +78,7 @@ export function middleware(request: NextRequest) {
 
   // Guest tries to open a protected page → send to login
   if (!token) {
-    const loginUrl = new URL("/login", request.url);
+    const loginUrl = new URL("/login", request.nextUrl);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
