@@ -1,8 +1,12 @@
 const MAX_AGE = 60 * 60 * 24 * 30;
 
 function cookieFlags(): string {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `SameSite=Strict${secure}`;
+  // Only mark cookies Secure when the page itself is served over HTTPS.
+  // Tagging a cookie Secure on an http:// page makes the browser drop it,
+  // which silently breaks login until a real TLS cert is in place.
+  const onHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+  const secure = onHttps ? "; Secure" : "";
+  return `SameSite=Lax${secure}`;
 }
 
 function setCookie(name: string, value: string, maxAge = MAX_AGE) {
