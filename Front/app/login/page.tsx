@@ -10,6 +10,46 @@ const API_BASE_URL =
 
 type Step = "login" | "mfa";
 
+const AUTH_PATHS = ["/login", "/signup", "/forgot-password"];
+
+// The `next` query param set by middleware. Only same-origin paths are accepted,
+// so a crafted link can't bounce the user to another site after login.
+function getNextPath(): string | null {
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) {
+    return null;
+  }
+  if (AUTH_PATHS.some((p) => next === p || next.startsWith(p + "/"))) {
+    return null;
+  }
+  return next;
+}
+
+// Works out the account type, stores the matching cookies and redirects —
+// shared by the password step and the phone-MFA step.
+async function completeLogin(token: string) {
+  const authHeaders = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+  const next = getNextPath();
+
+  const adminCheck = await fetch(`${API_BASE_URL}/admin/organizations?per_page=1`, { headers: authHeaders });
+  if (adminCheck.ok) {
+    saveAdminToken(token);
+    window.location.replace(next?.startsWith("/admin") ? next : "/admin/dashboard");
+    return;
+  }
+
+  const orgCheck = await fetch(`${API_BASE_URL}/organization/dashboard`, { headers: authHeaders });
+  saveToken(token);
+  if (orgCheck.ok) {
+    saveRole("organization");
+  } else {
+    clearRole();
+  }
+
+  const landing = orgCheck.ok ? "/organization/dashboard" : "/dashboard";
+  window.location.replace(next && !next.startsWith("/admin") ? next : landing);
+}
+
 export default function LoginPage() {
   const [step, setStep] = useState<Step>("login");
   const [email, setEmail] = useState("");
@@ -55,25 +95,7 @@ export default function LoginPage() {
         }
 
         if (payload?.data?.token) {
-          const token = payload.data.token;
-          const authHeaders = { Authorization: `Bearer ${token}`, Accept: "application/json" };
-
-          const adminCheck = await fetch(`${API_BASE_URL}/admin/organizations?per_page=1`, { headers: authHeaders });
-          if (adminCheck.ok) {
-            saveAdminToken(token);
-            window.location.replace("/admin/dashboard");
-            return;
-          }
-
-          const orgCheck = await fetch(`${API_BASE_URL}/organization/dashboard`, { headers: authHeaders });
-          saveToken(token);
-          if (orgCheck.ok) {
-            saveRole("organization");
-            window.location.replace("/organization/dashboard");
-          } else {
-            clearRole();
-            window.location.replace("/dashboard");
-          }
+          await completeLogin(payload.data.token);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -107,10 +129,10 @@ export default function LoginPage() {
           );
         }
 
-        if (payload?.data?.token) {
-          saveToken(payload.data.token);
+        if (!payload?.data?.token) {
+          throw new Error("Verification succeeded but no session was returned. Please sign in again.");
         }
-        window.location.replace("/dashboard");
+        await completeLogin(payload.data.token);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }

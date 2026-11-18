@@ -35,7 +35,6 @@ interface ArticleDetail {
   cover_image_url?: string | null;
   images?: string[];
   related: RelatedArticle[];
-  cover_image_url: string | null;
 }
 
 interface User { full_name: string; email: string }

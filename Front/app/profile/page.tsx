@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState, useTransition } from "react";
 import { clearToken } from "@/lib/auth";
-import { apiFetch, validateSession } from "@/lib/api";
+import { apiFetch, getRoleName, validateSession } from "@/lib/api";
 import { BrandLoader } from "@/components/BrandLoader";
 import BackLink from "@/components/BackLink";
 
@@ -13,7 +13,8 @@ interface User {
   email: string;
   phone: string | null;
   country: string | null;
-  role?: string;
+  role?: unknown;
+  role_name?: string;
 }
 
 type Tab = "profile" | "password";
@@ -142,7 +143,8 @@ export default function ProfilePage() {
     );
   }
 
-  const isOrg = user?.role === "organization" || user?.role === "organizer";
+  const roleName = getRoleName(user);
+  const isOrg = roleName === "organization" || roleName === "organizer";
   const homeHref = isOrg ? "/organization/dashboard" : "/dashboard";
   const displayName = user?.full_name || user?.username || user?.email || "";
   const initials =
@@ -152,7 +154,7 @@ export default function ProfilePage() {
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase())
       .join("") || "?";
-  const roleLabel = isOrg ? "Organization" : user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : null;
+  const roleLabel = isOrg ? "Organization" : roleName ? roleName.charAt(0).toUpperCase() + roleName.slice(1) : null;
 
   function switchTab(next: Tab) {
     setTab(next);

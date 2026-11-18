@@ -54,6 +54,10 @@ interface SubPayload {
 
 interface User { full_name: string; email: string }
 
+function normaliseInterval(value: unknown): Plan["interval"] {
+  return value === "year" || value === "yearly" || value === "annual" ? "year" : "month";
+}
+
 export default function SubscriptionPage() {
   const [user, setUser] = useState<User | null>(null);
   const [data, setData] = useState<SubPayload | null>(null);
@@ -151,7 +155,13 @@ export default function SubscriptionPage() {
 
   const initials = user?.full_name?.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase() ?? "NL";
   const sub = data?.subscription;
-  const plans = data?.plans ?? [];
+  // The API sends `interval` as "monthly"/"yearly" and may omit `features`;
+  // normalise here so the plan cards never crash on a missing field.
+  const plans: Plan[] = (data?.plans ?? []).map((p) => ({
+    ...p,
+    features: Array.isArray(p.features) ? p.features : [],
+    interval: normaliseInterval(p.interval),
+  }));
   const invoices = data?.invoices ?? [];
   const isActive = sub?.status === "active";
   const isCanceling = !!sub?.cancel_at;
