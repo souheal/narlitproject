@@ -31,6 +31,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'narlit.admin' => EnsureAdminAccess::class,
             'narlit.user.access' => EnsureNarLitUserAccess::class,
         ]);
+        // API-only app: don't try to resolve a `login` named route when a
+        // guest hits a protected endpoint. The exception handler returns JSON.
+        $middleware->redirectGuestsTo(fn () => null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

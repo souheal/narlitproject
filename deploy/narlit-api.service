@@ -1,0 +1,14 @@
+[Unit]
+Description=NarLit API (Laravel)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/narlitproject/Back
+ExecStart=/usr/bin/php artisan serve --host=127.0.0.1 --port=8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

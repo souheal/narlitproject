@@ -1,0 +1,20 @@
+# Railway build + runtime config for the Laravel backend.
+# Railway auto-detects PHP via Nixpacks; this file pins what it should install
+# and what to run on container start.
+
+[phases.setup]
+nixPkgs = ["php82", "php82Packages.composer", "php82Extensions.pdo_pgsql", "php82Extensions.pgsql"]
+
+[phases.install]
+cmds = ["composer install --no-dev --optimize-autoloader --no-interaction"]
+
+[phases.build]
+cmds = [
+  "php artisan config:clear",
+  "php artisan route:clear",
+  "php artisan view:clear",
+]
+
+[start]
+# Run migrations and link storage every boot, then serve on the Railway-assigned port.
+cmd = "php artisan migrate --force && php artisan storage:link --force && php artisan serve --host=0.0.0.0 --port=$PORT"

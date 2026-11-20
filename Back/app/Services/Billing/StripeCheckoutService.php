@@ -100,7 +100,8 @@ class StripeCheckoutService
                 throw new ApiException('The selected subscription plan is currently disabled.', 422);
             }
 
-            if (! $this->hasValidStripePriceId($plan)) {
+            // The fake-checkout path skips Stripe entirely, so a real price_* id isn't required.
+            if (! $this->hasValidStripePriceId($plan) && ! (bool) config('services.stripe.fake_checkout', false)) {
                 throw new ApiException('The selected subscription plan is not configured for payment.', 422);
             }
 

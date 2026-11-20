@@ -1,0 +1,15 @@
+[Unit]
+Description=NarLit Frontend (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/narlitproject/Front
+ExecStart=/usr/bin/npm start -- -H 127.0.0.1 -p 3000
+Environment=NODE_ENV=production
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

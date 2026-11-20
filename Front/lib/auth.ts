@@ -1,8 +1,12 @@
 const MAX_AGE = 60 * 60 * 24 * 30;
 
 function cookieFlags(): string {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `SameSite=Strict${secure}`;
+  // Only mark cookies Secure when the page itself is served over HTTPS.
+  // Tagging a cookie Secure on an http:// page makes the browser drop it,
+  // which silently breaks login until a real TLS cert is in place.
+  const onHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+  const secure = onHttps ? "; Secure" : "";
+  return `SameSite=Lax${secure}`;
 }
 
 function setCookie(name: string, value: string, maxAge = MAX_AGE) {
@@ -21,7 +25,43 @@ function deleteCookie(name: string) {
 // User
 export const saveToken  = (token: string) => setCookie("auth_token", token);
 export const getToken   = ()               => getCookie("auth_token");
-export const clearToken = () => { deleteCookie("auth_token"); deleteCookie("auth_role"); };
+export const clearToken = () => {
+  deleteCookie("auth_token");
+  deleteCookie("auth_role");
+  clearCachedUser();
+};
+
+// Cached profile for instant renders between page navigations.
+// Not for authorization — session validity is still verified server-side.
+const CACHED_USER_KEY = "narlit_cached_user_v1";
+
+export interface CachedUser {
+  full_name?: string;
+  email?: string;
+  role_name?: string;
+}
+
+export function cacheUser(user: CachedUser): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(CACHED_USER_KEY, JSON.stringify(user));
+  } catch { /* storage unavailable; just skip */ }
+}
+
+export function getCachedUser(): CachedUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(CACHED_USER_KEY);
+    return raw ? (JSON.parse(raw) as CachedUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearCachedUser(): void {
+  if (typeof window === "undefined") return;
+  try { sessionStorage.removeItem(CACHED_USER_KEY); } catch { /* ignore */ }
+}
 
 // Remembers org accounts so middleware can send them to the org area, not the member one
 export const saveRole = (role: string) => setCookie("auth_role", role);

@@ -240,7 +240,7 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: "white", fontWeight: 900, fontSize: "1.8rem",
                   }}>
-                    {org.organization_name.slice(0, 2).toUpperCase()}
+                    {(org.organization_name ?? "").slice(0, 2).toUpperCase()}
                   </div>
                 )}
                 <div>

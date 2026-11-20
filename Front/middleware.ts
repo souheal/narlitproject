@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
+/**
+ * Build an absolute URL rooted at the *public* origin behind our reverse proxy.
+ * Using request.nextUrl directly keeps the internal 127.0.0.1:3000 origin in
+ * some Next.js versions, so we reconstruct the URL from forwarded headers.
+ */
+function buildUrl(request: NextRequest, path: string): URL {
+  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");
+  const origin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : request.nextUrl.origin;
+  return new URL(path, origin);
+}
+
 // Pages accessible to everyone — never redirected
 const TRULY_PUBLIC_PATHS = [
   "/",
@@ -59,7 +71,7 @@ export function middleware(request: NextRequest) {
   // Admin routes — require admin_token
   if (pathname.startsWith("/admin")) {
     if (!adminToken) {
-      const loginUrl = new URL("/login", request.url);
+      const loginUrl = buildUrl(request, "/login");
       loginUrl.searchParams.set("next", pathname);
       return NextResponse.redirect(loginUrl);
     }
@@ -68,7 +80,7 @@ export function middleware(request: NextRequest) {
 
   // Logged-in org accounts skip the public landing page
   if (isOrg && token && pathname === "/") {
-    return NextResponse.redirect(new URL("/organization/dashboard", request.url));
+    return NextResponse.redirect(buildUrl(request, "/organization/dashboard"));
   }
 
   // Truly public pages — always let through
@@ -78,12 +90,12 @@ export function middleware(request: NextRequest) {
 
   // Logged-in user tries to open login/signup → send to dashboard
   if (isAuthPage && token) {
-    return NextResponse.redirect(new URL(isOrg ? "/organization/dashboard" : "/dashboard", request.url));
+    return NextResponse.redirect(buildUrl(request, isOrg ? "/organization/dashboard" : "/dashboard"));
   }
 
   // Org accounts never land on the member dashboard
   if (isOrg && token && pathname === "/dashboard") {
-    return NextResponse.redirect(new URL("/organization/dashboard", request.url));
+    return NextResponse.redirect(buildUrl(request, "/organization/dashboard"));
   }
 
   // Auth pages accessible to guests
@@ -93,7 +105,7 @@ export function middleware(request: NextRequest) {
 
   // Guest tries to open a protected page → send to login
   if (!token) {
-    const loginUrl = new URL("/login", request.url);
+    const loginUrl = buildUrl(request, "/login");
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }

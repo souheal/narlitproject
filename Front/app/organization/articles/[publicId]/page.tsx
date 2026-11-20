@@ -56,11 +56,10 @@ export default function OrgArticlePage() {
     });
   }, [publicId]);
 
-  function handleSaved(saved: OrgArticleDetail, message: string) {
-    setArticle(saved);
-    setVersion((v) => v + 1);
-    setSuccess(message);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  function handleSaved(saved: OrgArticleDetail, _message: string) {
+    // Jump back to the listing immediately. The listing shows a dismissible
+    // banner based on the new status (pending review / published / draft).
+    window.location.replace(`/organization/articles?submitted=${encodeURIComponent(saved.status)}`);
   }
 
   if (checking) {

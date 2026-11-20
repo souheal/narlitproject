@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { clearToken, saveRole } from "@/lib/auth";
+import { clearToken, saveRole, cacheUser, getCachedUser } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { BellIcon } from "@/components/icons";
 import { safeHref } from "@/lib/safeUrl";
@@ -56,7 +56,12 @@ export default function OrgNav({ active, name, email, initials }: Props) {
   const [open, setOpen] = useState<null | "account" | "notif">(null);
   const [unread, setUnread] = useState(0);
   const [notifs, setNotifs] = useState<NotifItem[] | null>(null);
-  const [me, setMe] = useState<{ name?: string; email?: string }>({});
+  const [me, setMe] = useState<{ name?: string; email?: string }>(() => {
+    // Read cached profile synchronously so the avatar renders correct initials on first paint.
+    if (name) return {};
+    const cached = getCachedUser();
+    return cached ? { name: cached.full_name, email: cached.email } : {};
+  });
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Covers sessions that logged in before the role cookie existed
@@ -69,6 +74,7 @@ export default function OrgNav({ active, name, email, initials }: Props) {
       .then((d) => {
         const u = d.data?.user ?? d.data ?? {};
         setMe({ name: u.full_name, email: u.email });
+        cacheUser({ full_name: u.full_name, email: u.email, role_name: u.role_name });
       })
       .catch(() => {});
   }, [name]);
@@ -139,7 +145,9 @@ export default function OrgNav({ active, name, email, initials }: Props) {
 
   const displayName = name ?? me.name;
   const displayEmail = email ?? me.email;
-  const badge = initials ?? (displayName ? initialsOf(displayName) : "OR");
+  // No fallback letters: an empty avatar is better than the wrong initials.
+  const badge = initials ?? (displayName ? initialsOf(displayName) : "");
+  const isLoadingBadge = badge === "";
 
   return (
     <nav className="hm-nav">
@@ -214,9 +222,12 @@ export default function OrgNav({ active, name, email, initials }: Props) {
             onClick={() => setOpen(open === "account" ? null : "account")}
             aria-label="Account menu"
             aria-expanded={open === "account"}
-            style={{ border: 0 }}
+            style={{
+              border: 0,
+              ...(isLoadingBadge ? { background: "var(--panel)", color: "transparent" } : {}),
+            }}
           >
-            {badge}
+            {badge || "·"}
           </button>
           {open === "account" && (
             <div className="hm-nav-dropdown">

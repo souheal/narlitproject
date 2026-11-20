@@ -89,7 +89,9 @@ export default function OrgDashboardPage() {
     });
   }, []);
 
-  if (checking) {
+  // Hold the full-page loader until dashboard data arrives, so the user never
+  // sees fallback copy like "Your organization" / "Complete your verification".
+  if (checking || (loading && !data)) {
     return (
       <BrandLoader />
     );

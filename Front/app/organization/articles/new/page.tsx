@@ -27,8 +27,8 @@ export default function NewArticlePage() {
   }, []);
 
   function handleSaved(saved: OrgArticleDetail) {
-    // Continue on the article's own page, where it can be edited further.
-    window.location.replace(`/organization/articles/${saved.public_id}`);
+    // Jump back to the listing; a dismissible banner reflects the new status.
+    window.location.replace(`/organization/articles?submitted=${encodeURIComponent(saved.status)}`);
   }
 
   if (checking) {

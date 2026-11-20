@@ -72,7 +72,13 @@
       "Bash(tasklist /FI \"PID eq 47440\")",
       "Bash(tasklist //FI \"PID eq 40588\")",
       "Bash(tasklist //FI \"PID eq 47440\")",
-      "Bash(php -l app/Services/Admin/AdminArticleModerationService.php)"
+      "Bash(php -l app/Services/Admin/AdminArticleModerationService.php)",
+      "Bash(python -c *)",
+      "Bash(node -e *)",
+      "Bash(php -l app/Http/Controllers/Api/Organization/OrganizationArticleController.php)",
+      "Bash(php -r 'require '\\\\''vendor/autoload.php'\\\\''; $app = require '\\\\''bootstrap/app.php'\\\\''; $app->make\\('\\\\''router'\\\\''\\)->getRoutes\\(\\); echo '\\\\''Routes OK'\\\\'' . PHP_EOL;')",
+      "Bash(php -l app/Services/Organization/OrganizationArticleService.php)",
+      "Bash(php -l app/Services/Impact/UserImpactDashboardService.php)"
     ]
   }
 }
