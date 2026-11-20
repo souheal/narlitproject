@@ -611,7 +611,7 @@ function AdminArticlesPageContent() {
             {detailLoading && (
               <div aria-busy="true" aria-label="Loading article" style={{ marginTop: 16 }}>
                 <Skeleton height={140} radius={8} />
-                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                <div className="rg-4" style={{ marginTop: 12, gap: 8 }}>
                   {Array.from({ length: 4 }).map((_, i) => (
                     <Skeleton key={i} height={14} />
                   ))}
@@ -709,7 +709,7 @@ function AdminArticlesPageContent() {
             )}
 
             {detail && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 12, fontSize: "0.75rem" }}>
+              <div className="rg-4" style={{ gap: 8, marginBottom: 12, fontSize: "0.75rem" }}>
                 <div><strong>Reads:</strong> {detail.read_statistics.total_reads}</div>
                 <div><strong>Unique:</strong> {detail.read_statistics.total_unique_reads}</div>
                 <div><strong>Seconds:</strong> {detail.read_statistics.total_reading_seconds}</div>

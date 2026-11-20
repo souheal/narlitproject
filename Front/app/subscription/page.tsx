@@ -347,36 +347,38 @@ export default function SubscriptionPage() {
           <div className="hm-panel">
             {invoices.length === 0 && <p className="hm-empty">No invoices yet.</p>}
             {invoices.length > 0 && (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
-                <thead>
-                  <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: "0.75rem", textTransform: "uppercase" }}>
-                    <th style={{ padding: "10px 0" }}>Date</th>
-                    <th>Invoice</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.map((inv) => (
-                    <tr key={inv.public_id} style={{ borderTop: "1px solid var(--line)" }}>
-                      <td style={{ padding: "12px 0" }}>{new Date(inv.paid_at ?? inv.created_at).toLocaleDateString()}</td>
-                      <td>{inv.invoice_number ?? inv.public_id.slice(0, 8)}</td>
-                      <td>${inv.amount} {inv.currency}</td>
-                      <td>
-                        <span className={`admin-badge ${inv.status === "paid" ? "admin-badge-success" : "admin-badge-pending"}`}>
-                          {inv.status}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        {inv.pdf_url && (
-                          <a href={safeHref(inv.pdf_url)} target="_blank" rel={EXTERNAL_LINK_REL} className="su-link">Download PDF</a>
-                        )}
-                      </td>
+              <div className="table-scroll">
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                      <th style={{ padding: "10px 0" }}>Date</th>
+                      <th>Invoice</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {invoices.map((inv) => (
+                      <tr key={inv.public_id} style={{ borderTop: "1px solid var(--line)" }}>
+                        <td style={{ padding: "12px 0" }}>{new Date(inv.paid_at ?? inv.created_at).toLocaleDateString()}</td>
+                        <td>{inv.invoice_number ?? inv.public_id.slice(0, 8)}</td>
+                        <td>${inv.amount} {inv.currency}</td>
+                        <td>
+                          <span className={`admin-badge ${inv.status === "paid" ? "admin-badge-success" : "admin-badge-pending"}`}>
+                            {inv.status}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          {inv.pdf_url && (
+                            <a href={safeHref(inv.pdf_url)} target="_blank" rel={EXTERNAL_LINK_REL} className="su-link">Download PDF</a>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
           </>

@@ -206,7 +206,16 @@ export default function SignupPage() {
               suppressHydrationWarning
               className={`su-step ${i === stepIndex ? "su-step-active" : ""} ${i < stepIndex ? "su-step-done" : ""}`}
             >
-              <span className="su-step-dot" />
+              {/* Plain dot on desktop; numbered circle (✓ once done) on phones. */}
+              <span className="su-step-dot">
+                {i < stepIndex ? (
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3.5 8.5l3 3 6-7" />
+                  </svg>
+                ) : (
+                  i + 1
+                )}
+              </span>
               <span className="su-step-label">{s.label}</span>
             </div>
           ))}

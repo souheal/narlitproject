@@ -130,7 +130,7 @@ export default function HelpPage() {
         <section className="hm-section" style={{ maxWidth: 820, margin: "0 auto" }}>
           <h2 className="hm-section-title">Help & Support</h2>
 
-          <div className="hm-content-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 20 }}>
+          <div className="hm-content-grid rg-2" style={{ gap: 20, marginTop: 20 }}>
             <a href="mailto:support@narlit.com" className="hm-panel" style={{ textDecoration: "none", color: "inherit", padding: 20 }}>
               <div style={{ fontSize: "2rem" }}>✉️</div>
               <h3 className="hm-panel-title">Email support</h3>

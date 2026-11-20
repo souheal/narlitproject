@@ -424,7 +424,7 @@ function AdminUsersPageContent() {
 
             {detailLoading && (
               <div aria-busy="true" aria-label="Loading user details" style={{ marginTop: 12 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div className="rg-2" style={{ gap: 12, marginBottom: 12 }}>
                   {Array.from({ length: 6 }).map((_, i) => (
                     <Skeleton key={i} width="80%" height={14} />
                   ))}
@@ -438,7 +438,7 @@ function AdminUsersPageContent() {
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "16px 0" }}>
+            <div className="rg-2" style={{ gap: 12, margin: "16px 0" }}>
               <div><strong>Role:</strong> {detail?.profile.role ?? selectedUser.role}</div>
               <div><strong>Phone:</strong> {detail?.profile.phone ?? selectedUser.phone ?? "—"}</div>
               <div><strong>Status:</strong> {detail?.profile.account_status ?? (selectedUser.is_active ? "active" : "suspended")}</div>
@@ -453,7 +453,7 @@ function AdminUsersPageContent() {
             {detail?.subscription && (
               <div style={{ padding: 12, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, marginBottom: 12 }}>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>Subscription</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: "0.85rem" }}>
+                <div className="rg-2" style={{ gap: 6, fontSize: "0.85rem" }}>
                   <div><strong>Plan:</strong> {detail.subscription.plan}</div>
                   <div><strong>Status:</strong> {detail.subscription.status}</div>
                   <div><strong>Amount:</strong> ${detail.subscription.amount} {detail.subscription.currency}</div>

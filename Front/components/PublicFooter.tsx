@@ -9,8 +9,8 @@ export default function PublicFooter() {
         background: "var(--panel)",
       }}
     >
-      <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", gap: 32 }}>
-        <div>
+      <div className="pf-grid">
+        <div className="pf-brand">
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
             <span className="hm-nav-mark">
               <span className="hm-nm-orange" />

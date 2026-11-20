@@ -289,7 +289,7 @@ export default async function HomePage() {
             <h2 style={{ fontSize: "1.7rem", marginTop: 8 }}>
               About ${nonprofitShare} of every ${monthlyPrice.toFixed(2)} goes directly to nonprofits.
             </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginTop: 30 }}>
+            <div className="rg-3" style={{ gap: 20, marginTop: 30 }}>
               <Slice pct={impactSplit.nonprofit_percentage} color="var(--orange)" label="Nonprofits" />
               <Slice pct={impactSplit.operations_percentage} color="var(--teal)" label="Operations" />
               <Slice pct={impactSplit.growth_percentage} color="#7c5cbf" label="Growth" />
