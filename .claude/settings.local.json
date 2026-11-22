@@ -78,7 +78,13 @@
       "Bash(php -l app/Http/Controllers/Api/Organization/OrganizationArticleController.php)",
       "Bash(php -r 'require '\\\\''vendor/autoload.php'\\\\''; $app = require '\\\\''bootstrap/app.php'\\\\''; $app->make\\('\\\\''router'\\\\''\\)->getRoutes\\(\\); echo '\\\\''Routes OK'\\\\'' . PHP_EOL;')",
       "Bash(php -l app/Services/Organization/OrganizationArticleService.php)",
-      "Bash(php -l app/Services/Impact/UserImpactDashboardService.php)"
+      "Bash(php -l app/Services/Impact/UserImpactDashboardService.php)",
+      "Bash([ -f \"$HOME/.ssh/id_ed25519_narlit\" ])",
+      "Bash(ssh-keygen -t ed25519 -N '' -f __TRACKED_VAR__/.ssh/id_ed25519_narlit -C narlit-vps)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(nslookup narlit.com 8.8.8.8)",
+      "Bash(nslookup www.narlit.com 8.8.8.8)"
     ]
   }
 }
