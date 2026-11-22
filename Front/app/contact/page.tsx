@@ -52,7 +52,7 @@ export default function ContactPage() {
             Questions about your subscription, help publishing on NarLit, or press requests — we read every message.
           </p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 40, marginTop: 40 }}>
+          <div className="rg-split" style={{ gap: 40, marginTop: 40 }}>
             <form onSubmit={handleSubmit}>
               {feedback && <p className="narlit-feedback narlit-feedback-success">{feedback}</p>}
               {error && <p className="narlit-feedback narlit-feedback-error">{error}</p>}

@@ -7,9 +7,6 @@ import OrgNav from "@/components/OrgNav";
 import ArticleEditor, { OrgArticleDetail } from "@/components/ArticleEditor";
 import BackLink from "@/components/BackLink";
 
-const COVER_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
-const COVER_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
-
 export default function NewArticlePage() {
   const [checking, setChecking] = useState(true);
   const [approvalRequired, setApprovalRequired] = useState(true);

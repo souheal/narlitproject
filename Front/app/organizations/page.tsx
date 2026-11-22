@@ -95,6 +95,7 @@ export default function OrganizationsPage() {
               placeholder="Search by name…"
               style={{
                 flex: 1,
+                minWidth: 0,
                 padding: "12px 16px",
                 border: "1px solid var(--line)",
                 borderRadius: 12,

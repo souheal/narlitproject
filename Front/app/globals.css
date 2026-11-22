@@ -766,9 +766,72 @@ a {
   .su-card { padding: 24px 18px; }
   .su-grid,
   .su-plans { grid-template-columns: 1fr; }
-  .su-steps { gap: 4px; }
-  .su-step { padding: 8px; }
-  .su-step-label { display: none; }
+  /* Step pills become a numbered stepper: circles joined by a line that fills as you progress. */
+  .su-steps { gap: 0; margin-top: 4px; }
+  .su-step,
+  .su-step-active {
+    position: relative;
+    flex: 1;
+    flex-direction: column;
+    gap: 7px;
+    padding: 0;
+    border: 0;
+    background: none;
+    min-width: 0;
+  }
+  .su-step:not(:first-child)::before {
+    content: "";
+    position: absolute;
+    top: 14px;
+    right: 50%;
+    width: 100%;
+    height: 3px;
+    border-radius: 999px;
+    background: var(--line);
+    transition: background 0.3s;
+  }
+  .su-step-done:not(:first-child)::before { background: var(--teal); }
+  .su-step-active:not(:first-child)::before { background: linear-gradient(90deg, var(--teal), var(--orange)); }
+  .su-step .su-step-dot {
+    position: relative;
+    z-index: 1;
+    width: 31px;
+    height: 31px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid var(--line);
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 800;
+    transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
+  }
+  .su-step-active .su-step-dot {
+    background: linear-gradient(135deg, var(--orange), var(--teal));
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 0 0 5px rgba(17, 182, 200, 0.14), 0 6px 16px rgba(255, 122, 0, 0.28);
+  }
+  .su-step-done .su-step-dot {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: #fff;
+  }
+  .su-step .su-step-label {
+    display: block;
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .su-step-active .su-step-label { color: var(--text); font-weight: 800; }
+  .su-step-done .su-step-label { color: var(--teal-deep); }
+}
+/* Desktop keeps the small dot; hide the step number inside it. */
+@media (min-width: 521px) {
+  .su-step-dot { font-size: 0; overflow: hidden; }
+  .su-step-dot svg { display: none; }
 }
 
 /* ── Login ── */
@@ -1612,20 +1675,19 @@ a {
     grid-column: 3;
     order: 4;
   }
+  /* Open menu: brand + close button stay on the first row, links and auth stack below. */
   .hm-nav-inner.hm-nav-open {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 66px auto auto;
+    align-items: center;
     height: auto;
     padding-bottom: 16px;
-    gap: 8px;
+    row-gap: 8px;
   }
-  .hm-nav-inner.hm-nav-open .hm-nav-brand-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-  }
+  .hm-nav-inner.hm-nav-open .hm-nav-links,
+  .hm-nav-inner.hm-nav-open .hm-nav-auth { grid-column: 1 / -1; }
+  .hm-nav-inner.hm-nav-open .hm-nav-link { padding: 14px 16px; }
   .hm-nav-inner.hm-nav-open .hm-nav-links {
     display: flex;
     flex-direction: column;
@@ -2788,7 +2850,8 @@ section[id],
 
 /* Responsive */
 @media (max-width: 1024px) {
-  .hm-content-grid { grid-template-columns: 1fr; }
+  .hm-content-grid { grid-template-columns: minmax(0, 1fr); }
+  .hm-content-grid > * { min-width: 0; }
   .hm-side { flex-direction: row; flex-wrap: wrap; }
   .hm-panel { flex: 1; min-width: 280px; }
 }
@@ -2800,6 +2863,7 @@ section[id],
 @media (max-width: 480px) {
   .hm-stats-grid { grid-template-columns: 1fr 1fr; }
   .hm-side { flex-direction: column; }
+  .hm-side .hm-panel, .hm-content-grid .hm-panel { min-width: 0; }
   .hm-main { padding: 20px 16px 48px; }
 }
 
@@ -4639,8 +4703,45 @@ section[id],
 
 @media (max-width: 768px) {
   .admin-shell { flex-direction: column; }
-  .admin-sidebar { width: 100%; flex: none; flex-direction: row; flex-wrap: wrap; padding: 16px; }
-  .admin-nav { flex-direction: row; }
+  /* Sidebar becomes a sticky top bar: brand + sign out, then a swipeable nav strip. */
+  .admin-sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    width: 100%;
+    flex: none;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "brand logout" "nav nav";
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .admin-brand { grid-area: brand; padding: 0; margin: 0; border-bottom: 0; font-size: 1.15rem; }
+  .admin-logout-btn { grid-area: logout; padding: 8px 12px; font-size: 0.82rem; }
+  .admin-nav {
+    grid-area: nav;
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    margin: 0 -16px;
+    padding: 0 16px 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-nav::-webkit-scrollbar { display: none; }
+  .admin-nav-item {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    gap: 6px;
+    border: 1px solid var(--line);
+  }
+  .admin-nav-item-active { border-color: transparent; }
+  .admin-main { padding: 20px 16px 40px; min-width: 0; overflow: visible; }
   .admin-stats-grid { grid-template-columns: 1fr; }
 }
 
@@ -4727,6 +4828,17 @@ section[id],
 }
 .profile-signout { flex: 0 0 auto; }
 .profile-tabs { margin-top: 6px; }
+/* Profile / Password tabs stretch to the card's width as two equal halves. */
+.profile-wrap .profile-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0;
+  overflow: visible;
+}
+.profile-tabs .admin-tab { min-width: 0; text-align: center; }
 .profile-card { padding: 28px; }
 .profile-card-head .hm-panel-sub { margin-bottom: 20px; }
 .profile-feedback { margin-bottom: 18px; }
@@ -4772,6 +4884,7 @@ section[id],
   max-width: 860px;
   margin: 0 auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
 .oa-header { margin-top: 4px; }
@@ -4948,6 +5061,9 @@ section[id],
   justify-content: space-between;
   gap: 16px;
 }
+.oa-header-row > div { min-width: 0; }
+.oa-title { overflow-wrap: anywhere; }
+.oa-delete-btn { flex: 0 0 auto; }
 .oa-delete-btn { flex: 0 0 auto; color: var(--orange-deep); }
 .oa-dialog-title { margin: 0 0 10px; font-size: 1.15rem; font-weight: 900; }
 .oa-dialog-text { margin: 0 0 18px; font-size: 0.92rem; line-height: 1.55; color: var(--text); }
@@ -5363,4 +5479,158 @@ section[id],
 .login-card {
   background: rgba(255, 255, 255, 0.74);
   backdrop-filter: blur(2px);
+}
+
+/* ==========================================================================
+   Mobile & responsive fixes
+   Most pages lay out with inline styles, which media queries can't override,
+   so these rules supply class-based layouts plus phone-specific overrides.
+   ========================================================================== */
+
+/* ---- Global guards ---- */
+
+/* Flex-row fields default to their intrinsic width (~170px) and can't shrink below it,
+   which pushed search bars past the screen edge on small phones. */
+input, select, textarea { min-width: 0; }
+img, video { max-width: 100%; }
+
+/* iOS Safari zooms the page when focusing a field with font-size < 16px. Many fields set
+   their size inline, so !important is needed to win on phones. */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea { font-size: 16px !important; }
+}
+
+/* ---- Responsive grid utilities (replace fixed inline gridTemplateColumns) ---- */
+
+.rg-2, .rg-3, .rg-4, .rg-split { display: grid; }
+.rg-2 { grid-template-columns: 1fr 1fr; }
+.rg-3 { grid-template-columns: repeat(3, 1fr); }
+.rg-4 { grid-template-columns: repeat(4, 1fr); }
+.rg-split { grid-template-columns: 2fr 1fr; }
+.rg-2 > *, .rg-3 > *, .rg-4 > *, .rg-split > * { min-width: 0; }
+@media (max-width: 860px) {
+  .rg-split { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .rg-4 { grid-template-columns: 1fr 1fr; }
+  .rg-3 { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .rg-2 { grid-template-columns: 1fr; }
+}
+
+/* ---- Tables ---- */
+
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+@media (max-width: 640px) {
+  .table-scroll table { min-width: 480px; }
+}
+
+/* ---- Public footer ---- */
+
+.pf-grid {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: 32px;
+}
+@media (max-width: 860px) {
+  .pf-grid { grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .pf-brand { grid-column: 1 / -1; }
+}
+@media (max-width: 520px) {
+  .pf-grid { grid-template-columns: 1fr 1fr; gap: 24px 16px; }
+}
+
+/* ---- Top bar (public, member and organization) ---- */
+
+/* Dropdowns live inside the blurred nav, so their own backdrop-filter has nothing to blur —
+   use a near-solid background so page content doesn't show through. */
+.hm-panel-dropdown,
+.hm-nav-dropdown { background: rgba(255, 255, 255, 0.98); }
+
+.hm-nav-dd-item-active {
+  background: linear-gradient(90deg, rgba(255, 122, 0, 0.1), rgba(17, 182, 200, 0.12));
+  color: var(--text);
+  font-weight: 800;
+}
+
+@media (max-width: 520px) {
+  /* Compact bar: wordmark beside the logo, icons grouped in one soft pill, ringed avatar. */
+  .hm-nav .hm-nav-inner { height: 60px; padding: 0 14px; gap: 10px; }
+  .hm-nav .hm-nav-inner.hm-nav-open { height: auto; grid-template-rows: 60px auto auto; }
+  .hm-nav .hm-nav-mark { width: 30px; height: 30px; }
+  .hm-nav .hm-nav-wordmark { display: inline; font-size: 1.12rem; }
+  .hm-nav .hm-nav-user { gap: 8px; }
+  .hm-nav .hm-nav-actions {
+    gap: 0;
+    padding: 3px;
+    margin-right: 0;
+    border-right: 0;
+    border-radius: 999px;
+    background: rgba(17, 182, 200, 0.07);
+    border: 1px solid rgba(17, 182, 200, 0.12);
+  }
+  .hm-nav .hm-icon-btn { width: 34px; height: 34px; }
+  .hm-nav .hm-icon-btn svg { width: 18px; height: 18px; }
+  .hm-nav .hm-icon-btn:hover,
+  .hm-nav .hm-icon-btn-active { background: #fff; box-shadow: 0 2px 6px rgba(8, 47, 55, 0.08); }
+  .hm-nav .hm-nav-avatar {
+    width: 38px;
+    height: 38px;
+    box-shadow: 0 0 0 2px #fff, 0 4px 12px rgba(17, 182, 200, 0.28);
+  }
+
+  /* Dropdowns (search, notifications, menu, account): anchoring them to their button pushed
+     them off the left edge. Pin them full-width under the bar instead.
+     (.hm-nav has backdrop-filter, so position:fixed resolves against the nav itself.) */
+  .hm-nav .hm-panel-dropdown,
+  .hm-nav .hm-nav-dropdown,
+  .hm-nav .hm-search-dropdown,
+  .hm-nav .hm-notif-dropdown {
+    position: fixed;
+    top: 66px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    min-width: 0 !important;
+    max-height: calc(100vh - 86px);
+    overflow-y: auto;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 18px 40px rgba(8, 47, 55, 0.16);
+  }
+
+  /* Bigger touch targets for menu rows. */
+  .hm-nav .hm-nav-dd-item { padding: 12px 14px; font-size: 0.95rem; }
+}
+@media (max-width: 340px) {
+  .hm-nav .hm-nav-wordmark { display: none; }
+}
+
+/* ---- Admin ---- */
+
+@media (max-width: 900px) {
+  /* Tables swipe sideways (the wrapper was overflow:hidden, which cut off the action columns). */
+  .admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .admin-table th, .admin-table td { white-space: nowrap; }
+  .admin-table td { padding: 12px 14px; }
+}
+@media (max-width: 768px) {
+  /* Filter tabs swipe horizontally instead of pushing the page wider. */
+  .admin-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    margin-left: -16px;
+    margin-right: -16px;
+    padding: 0 16px 4px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-tabs::-webkit-scrollbar { display: none; }
+  .admin-tab { flex: 0 0 auto; white-space: nowrap; }
+  .admin-page-header > * { min-width: 0; }
 }

@@ -36,8 +36,23 @@ const BILLING_PAGES = [
   "/billing/cancel",
 ];
 
+// Top-level segments of every page under app/. A path outside this list is not a
+// page, so it goes straight to Next's 404 instead of bouncing guests to /login.
+// When you add a new top-level page folder, add its segment here too.
+const KNOWN_SEGMENTS = new Set([
+  "about", "account", "achievements", "admin", "articles", "billing", "bookmarks",
+  "contact", "cookies", "dashboard", "explore", "forgot-password", "help", "history",
+  "impact", "login", "notifications", "onboarding", "organization", "organizations",
+  "preferences", "privacy", "profile", "search", "signup", "subscription", "terms",
+]);
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  const firstSegment = pathname.split("/")[1] ?? "";
+  if (pathname !== "/" && !KNOWN_SEGMENTS.has(firstSegment)) {
+    return NextResponse.next();
+  }
 
   const isTrulyPublic = TRULY_PUBLIC_PATHS.some(
     (p) => pathname === p || pathname.startsWith(p + "/")

@@ -130,7 +130,7 @@ export default function PreferencesPage() {
             </div>
 
             <h3 className="hm-panel-title" style={{ marginTop: 32 }}>Language & region</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }}>
+            <div className="rg-2" style={{ gap: 16, marginTop: 12 }}>
               <label className="narlit-field">
                 <span>Language</span>
                 <select value={prefs.language} onChange={(e) => update("language", e.target.value)}>

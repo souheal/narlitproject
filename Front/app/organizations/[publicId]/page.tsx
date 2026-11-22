@@ -31,45 +31,58 @@ interface OrgDetail {
   logo_url: string | null;
   founded_year: number | null;
   total_articles: number;
-  total_supporters: number;
+  // Not sent by GET /organizations/{id} yet — null hides the related UI.
+  total_supporters: number | null;
   total_reads: number;
-  total_donations_received: string;
-  currency: string;
+  total_donations_received: string | null;
+  currency: string | null;
   is_supported_by_me: boolean;
-  my_donation_to_them: string;
+  my_donation_to_them: string | null;
   articles: Article[];
 }
 
 interface User { full_name: string; email: string }
 
-/** The backend's public organization payload differs from the shape this page was built against. */
-function normalizeOrg(raw: Record<string, unknown>, articles: Article[]): OrgDetail {
-  const name = (raw.organization_name as string | undefined) ?? (raw.name as string | undefined) ?? "";
-  const mission =
-    (raw.mission_statement as string | null | undefined) ??
-    (raw.description as string | null | undefined) ??
-    null;
+type Raw = Record<string, unknown>;
+const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/**
+ * GET /organizations/{id} returns `{ organization: {name, ...}, articles: [...] }`.
+ * Map that (and the richer member shape, if the backend adds it) onto OrgDetail
+ * so a missing field shows as empty instead of crashing the page.
+ */
+function normaliseOrg(data: Raw | null | undefined): OrgDetail | null {
+  const o = (data?.organization ?? null) as Raw | null;
+  if (!o || typeof o !== "object") return null;
+  const rawArticles = Array.isArray(o.articles) ? o.articles : Array.isArray(data?.articles) ? data.articles : [];
+  const articles: Article[] = (rawArticles as Raw[]).map((a) => ({
+    public_id: String(a.public_id ?? ""),
+    title: str(a.title) ?? "Untitled",
+    excerpt: str(a.excerpt),
+    category: str(a.category),
+    is_read: a.is_read === true,
+    read_time_minutes: num(a.read_time_minutes),
+    published_at: str(a.published_at),
+  }));
   return {
-    public_id: (raw.public_id as string) ?? "",
-    organization_name: name,
-    mission_statement: mission,
-    description: (raw.description as string | null | undefined) ?? mission,
-    category: (raw.category as string | null | undefined) ?? null,
-    city: (raw.city as string | null | undefined) ?? null,
-    country: (raw.country as string | null | undefined) ?? null,
-    website: (raw.website as string | null | undefined) ?? null,
-    logo_url: (raw.logo_url as string | null | undefined) ?? null,
-    founded_year: (raw.founded_year as number | null | undefined) ?? null,
-    total_articles:
-      (raw.total_articles as number | undefined) ??
-      (raw.published_articles_count as number | undefined) ??
-      articles.length,
-    total_supporters: (raw.total_supporters as number | undefined) ?? 0,
-    total_reads: (raw.total_reads as number | undefined) ?? 0,
-    total_donations_received: (raw.total_donations_received as string | undefined) ?? "0.00",
-    currency: (raw.currency as string | undefined) ?? "USD",
-    is_supported_by_me: (raw.is_supported_by_me as boolean | undefined) ?? false,
-    my_donation_to_them: (raw.my_donation_to_them as string | undefined) ?? "0.00",
+    public_id: String(o.public_id ?? ""),
+    organization_name: str(o.organization_name) ?? str(o.name) ?? "Organization",
+    mission_statement: str(o.mission_statement),
+    description: str(o.description),
+    category: str(o.category),
+    city: str(o.city),
+    country: str(o.country),
+    website: str(o.website),
+    logo_url: str(o.logo_url),
+    founded_year: num(o.founded_year),
+    total_articles: num(o.total_articles) ?? num(o.published_articles_count) ?? articles.length,
+    total_supporters: num(o.total_supporters),
+    total_reads: num(o.total_reads) ?? 0,
+    total_donations_received: str(o.total_donations_received),
+    currency: str(o.currency),
+    is_supported_by_me: o.is_supported_by_me === true,
+    my_donation_to_them: str(o.my_donation_to_them),
     articles,
   };
 }
@@ -92,13 +105,9 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
       const meData = await meRes.json();
       const orgData = await orgRes.json();
       setUser(meData.data?.user ?? meData.data ?? null);
-      if (orgRes.ok) {
-        const raw = orgData.data?.organization ?? null;
-        const articles = orgData.data?.articles ?? [];
-        setOrg(raw ? normalizeOrg(raw, articles) : null);
-      } else {
-        setError(orgData?.message ?? "Organization not found.");
-      }
+      const normalised = orgRes.ok ? normaliseOrg(orgData?.data) : null;
+      if (normalised) setOrg(normalised);
+      else setError(orgData?.message ?? "Organization not found.");
     } catch { setError("Failed to load organization."); }
     setLoading(false);
   }
@@ -247,7 +256,7 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
                   </div>
                 </div>
               </div>
-              {org.is_supported_by_me && (
+              {org.is_supported_by_me && org.my_donation_to_them && (
                 <div className="hm-welcome-badge">
                   ❤️ You&apos;ve donated ${org.my_donation_to_them}
                 </div>
@@ -258,24 +267,28 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
           {/* Stats */}
           <section className="hm-section">
             <div className="hm-stats-grid">
-              <div className="hm-stat-card">
-                <div className="hm-stat-icon hm-stat-icon-orange">💰</div>
-                <div className="hm-stat-value">${org.total_donations_received}</div>
-                <div className="hm-stat-label">Total Received</div>
-                <div className="hm-stat-hint">{org.currency}</div>
-              </div>
+              {org.total_donations_received !== null && (
+                <div className="hm-stat-card">
+                  <div className="hm-stat-icon hm-stat-icon-orange">💰</div>
+                  <div className="hm-stat-value">${org.total_donations_received}</div>
+                  <div className="hm-stat-label">Total Received</div>
+                  <div className="hm-stat-hint">{org.currency ?? "USD"}</div>
+                </div>
+              )}
               <div className="hm-stat-card">
                 <div className="hm-stat-icon hm-stat-icon-teal">📖</div>
                 <div className="hm-stat-value">{org.total_reads.toLocaleString()}</div>
                 <div className="hm-stat-label">Total Reads</div>
                 <div className="hm-stat-hint">{org.total_articles} articles</div>
               </div>
-              <div className="hm-stat-card">
-                <div className="hm-stat-icon hm-stat-icon-purple">👥</div>
-                <div className="hm-stat-value">{org.total_supporters.toLocaleString()}</div>
-                <div className="hm-stat-label">Supporters</div>
-                <div className="hm-stat-hint">On NarLit</div>
-              </div>
+              {org.total_supporters !== null && (
+                <div className="hm-stat-card">
+                  <div className="hm-stat-icon hm-stat-icon-purple">👥</div>
+                  <div className="hm-stat-value">{org.total_supporters.toLocaleString()}</div>
+                  <div className="hm-stat-label">Supporters</div>
+                  <div className="hm-stat-hint">On NarLit</div>
+                </div>
+              )}
             </div>
           </section>
 
@@ -295,7 +308,11 @@ export default function OrgDetailPage({ params }: { params: Promise<{ publicId: 
           <section className="hm-section">
             <div className="hm-section-header">
               <h2 className="hm-section-title">Their stories</h2>
-              <span className="hm-article-time">{org.articles.length} articles</span>
+              <span className="hm-article-time">
+                {org.articles.length < org.total_articles
+                  ? `Latest ${org.articles.length} of ${org.total_articles}`
+                  : `${org.articles.length} articles`}
+              </span>
             </div>
 
             {org.articles.length === 0 && (

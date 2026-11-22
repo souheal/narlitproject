@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clearAdminToken } from "@/lib/auth";
@@ -7,6 +8,16 @@ import { adminFetch } from "@/lib/api";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const navRef = useRef<HTMLElement>(null);
+
+  // On phones the nav is a horizontal strip; keep the current page's tab in view.
+  useEffect(() => {
+    const nav = navRef.current;
+    const active = nav?.querySelector<HTMLElement>(".admin-nav-item-active");
+    if (!nav || !active || nav.scrollWidth <= nav.clientWidth) return;
+    const offset = active.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft;
+    nav.scrollLeft = offset - (nav.clientWidth - active.offsetWidth) / 2;
+  }, [pathname]);
 
   async function handleLogout() {
     try { await adminFetch("/auth/logout", { method: "POST" }); } catch { /* noop */ }
@@ -35,7 +46,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <span className="admin-brand-label">Admin</span>
         </div>
 
-        <nav className="admin-nav" suppressHydrationWarning>
+        <nav className="admin-nav" ref={navRef} suppressHydrationWarning>
           {navItems.map((item) => (
             <Link
               key={item.href}

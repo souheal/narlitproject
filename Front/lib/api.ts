@@ -50,6 +50,22 @@ export async function validateSession(): Promise<boolean> {
 
 export type UserRole = "user" | "organization" | "admin";
 
+/**
+ * Reads the user's role name from an /auth/me payload. `/auth/me` sends
+ * `role_name`, and may also include the `role` relation as an object, so
+ * never assume `role` is a string.
+ */
+export function getRoleName(user: { role_name?: unknown; role?: unknown } | null | undefined): string | null {
+  if (!user) return null;
+  if (typeof user.role_name === "string" && user.role_name) return user.role_name;
+  if (typeof user.role === "string" && user.role) return user.role;
+  if (user.role && typeof user.role === "object" && "name" in user.role) {
+    const name = (user.role as { name?: unknown }).name;
+    if (typeof name === "string" && name) return name;
+  }
+  return null;
+}
+
 export interface AuthenticatedUser {
   id: number;
   full_name?: string;
@@ -97,7 +113,7 @@ export async function requireRole(
     return null;
   }
 
-  const role = user.role_name;
+  const role = getRoleName(user) as UserRole | null;
   if (!role || !allowed.includes(role)) {
     if (typeof window !== "undefined") {
       // Send user back to a safe landing based on their actual role

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { clearToken, saveRole, cacheUser, getCachedUser } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
-import { BellIcon } from "@/components/icons";
+import { BellIcon, MenuIcon } from "@/components/icons";
 import { safeHref } from "@/lib/safeUrl";
 
 type Section = "overview" | "articles" | "payouts";
@@ -53,7 +53,7 @@ function timeAgo(iso: string): string {
 
 /** Top bar shared by every organization page. */
 export default function OrgNav({ active, name, email, initials }: Props) {
-  const [open, setOpen] = useState<null | "account" | "notif">(null);
+  const [open, setOpen] = useState<null | "account" | "notif" | "menu">(null);
   const [unread, setUnread] = useState(0);
   const [notifs, setNotifs] = useState<NotifItem[] | null>(null);
   const [me, setMe] = useState<{ name?: string; email?: string }>(() => {
@@ -172,49 +172,78 @@ export default function OrgNav({ active, name, email, initials }: Props) {
           ))}
         </div>
         <div className="hm-nav-user" ref={rootRef}>
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              className={`hm-icon-btn${open === "notif" ? " hm-icon-btn-active" : ""}`}
-              onClick={() => setOpen(open === "notif" ? null : "notif")}
-              aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
-              aria-expanded={open === "notif"}
-            >
-              <BellIcon />
-              {unread > 0 && <span className="hm-icon-badge">{unread > 99 ? "99+" : unread}</span>}
-            </button>
-            {open === "notif" && (
-              <div className="hm-panel-dropdown hm-notif-dropdown">
-                <div className="hm-panel-dropdown-header">
-                  <h3 className="hm-panel-dropdown-title">Notifications</h3>
-                  {unread > 0 && (
-                    <button type="button" className="su-link" onClick={markAllRead} style={{ background: "none", border: 0, cursor: "pointer", fontSize: "0.75rem", fontFamily: "inherit" }}>
-                      Mark all read
-                    </button>
-                  )}
+          <div className="hm-nav-actions">
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                className={`hm-icon-btn${open === "notif" ? " hm-icon-btn-active" : ""}`}
+                onClick={() => setOpen(open === "notif" ? null : "notif")}
+                aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
+                aria-expanded={open === "notif"}
+              >
+                <BellIcon />
+                {unread > 0 && <span className="hm-icon-badge">{unread > 99 ? "99+" : unread}</span>}
+              </button>
+              {open === "notif" && (
+                <div className="hm-panel-dropdown hm-notif-dropdown">
+                  <div className="hm-panel-dropdown-header">
+                    <h3 className="hm-panel-dropdown-title">Notifications</h3>
+                    {unread > 0 && (
+                      <button type="button" className="su-link" onClick={markAllRead} style={{ background: "none", border: 0, cursor: "pointer", fontSize: "0.75rem", fontFamily: "inherit" }}>
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  <div className="hm-notif-list">
+                    {notifs === null && <div className="hm-search-empty">Loading…</div>}
+                    {notifs?.length === 0 && <div className="hm-search-empty">No notifications yet.</div>}
+                    {notifs?.map((n) => (
+                      <a
+                        key={n.public_id}
+                        href={safeHref(n.action_url, "/organization/articles")}
+                        onClick={() => markOneRead(n)}
+                        className={`hm-notif-item${!n.read_at ? " hm-notif-item-unread" : ""}`}
+                      >
+                        <div className="hm-notif-item-icon">{n.icon ?? "🔔"}</div>
+                        <div className="hm-notif-item-body">
+                          <p className="hm-notif-item-title">{n.title}</p>
+                          {n.body && <p className="hm-notif-item-desc">{n.body}</p>}
+                          <p className="hm-notif-item-time">{timeAgo(n.created_at)}</p>
+                        </div>
+                        {!n.read_at && <span className="hm-notif-item-dot" />}
+                      </a>
+                    ))}
+                  </div>
                 </div>
-                <div className="hm-notif-list">
-                  {notifs === null && <div className="hm-search-empty">Loading…</div>}
-                  {notifs?.length === 0 && <div className="hm-search-empty">No notifications yet.</div>}
-                  {notifs?.map((n) => (
+              )}
+            </div>
+
+            {/* Section links are hidden in the bar on phones; this menu replaces them. */}
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                className={`hm-icon-btn hm-nav-mobile-only${open === "menu" ? " hm-icon-btn-active" : ""}`}
+                onClick={() => setOpen(open === "menu" ? null : "menu")}
+                aria-label="Menu"
+                aria-expanded={open === "menu"}
+              >
+                <MenuIcon />
+              </button>
+              {open === "menu" && (
+                <div className="hm-panel-dropdown" style={{ minWidth: 200 }}>
+                  {LINKS.map((l) => (
                     <a
-                      key={n.public_id}
-                      href={safeHref(n.action_url, "/organization/articles")}
-                      onClick={() => markOneRead(n)}
-                      className={`hm-notif-item${!n.read_at ? " hm-notif-item-unread" : ""}`}
+                      key={l.key}
+                      href={l.href}
+                      className={`hm-nav-dd-item${l.key === active ? " hm-nav-dd-item-active" : ""}`}
+                      aria-current={l.key === active ? "page" : undefined}
                     >
-                      <div className="hm-notif-item-icon">{n.icon ?? "🔔"}</div>
-                      <div className="hm-notif-item-body">
-                        <p className="hm-notif-item-title">{n.title}</p>
-                        {n.body && <p className="hm-notif-item-desc">{n.body}</p>}
-                        <p className="hm-notif-item-time">{timeAgo(n.created_at)}</p>
-                      </div>
-                      {!n.read_at && <span className="hm-notif-item-dot" />}
+                      {l.label}
                     </a>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
           <button
             type="button"

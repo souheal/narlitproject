@@ -160,14 +160,15 @@ export default function AdminAuditPage() {
 
       {feedback && <p className="narlit-feedback narlit-feedback-success">{feedback}</p>}
 
-      <form onSubmit={applyFilters} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <form onSubmit={applyFilters} style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
         <input
           type="text"
           value={filterActor}
           onChange={(e) => setFilterActor(e.target.value)}
           placeholder="Filter by actor email…"
           style={{
-            flex: 1,
+            flex: "1 1 200px",
+            minWidth: 0,
             padding: "10px 14px",
             border: "1px solid var(--line)",
             borderRadius: 10,
@@ -182,7 +183,8 @@ export default function AdminAuditPage() {
           onChange={(e) => setFilterAction(e.target.value)}
           placeholder="Filter by action (e.g. approve)…"
           style={{
-            flex: 1,
+            flex: "1 1 200px",
+            minWidth: 0,
             padding: "10px 14px",
             border: "1px solid var(--line)",
             borderRadius: 10,
@@ -338,7 +340,7 @@ export default function AdminAuditPage() {
 
             {loadingDetails && (
               <div aria-busy="true" aria-label="Loading audit details" style={{ marginTop: 12 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div className="rg-2" style={{ gap: 12, marginBottom: 12 }}>
                   {Array.from({ length: 8 }).map((_, i) => (
                     <Skeleton key={i} width="80%" height={14} />
                   ))}
@@ -347,7 +349,7 @@ export default function AdminAuditPage() {
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "16px 0" }}>
+            <div className="rg-2" style={{ gap: 12, margin: "16px 0" }}>
               <div><strong>Action:</strong> {details.action}</div>
               <div><strong>Status:</strong> {details.status}</div>
               <div><strong>Actor:</strong> {details.actor?.name ?? "System"}</div>
