@@ -179,8 +179,6 @@ Route::prefix('v1')->group(function () {
         Route::delete('/articles/{publicId}/feature', [AdminArticleModerationController::class, 'unfeature']);
         Route::post('/articles/{publicId}/archive', [AdminArticleModerationController::class, 'archive']);
         Route::post('/articles/{publicId}/restore', [AdminArticleModerationController::class, 'restore']);
-        Route::patch('/articles/{publicId}', [AdminArticleModerationController::class, 'update']);
-        Route::delete('/articles/{publicId}', [AdminArticleModerationController::class, 'destroy'])->middleware('throttle:admin.sensitive');
         Route::get('/subscriptions/summary', [AdminSubscriptionRevenueController::class, 'summary']);
         Route::get('/subscriptions/metrics', [AdminSubscriptionRevenueController::class, 'metrics']);
         Route::get('/subscriptions', [AdminSubscriptionRevenueController::class, 'index']);
