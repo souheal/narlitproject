@@ -84,7 +84,11 @@
       "Bash(ssh *)",
       "Bash(scp *)",
       "Bash(nslookup narlit.com 8.8.8.8)",
-      "Bash(nslookup www.narlit.com 8.8.8.8)"
+      "Bash(nslookup www.narlit.com 8.8.8.8)",
+      "Bash(grep -r *)",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\"; grep -n \"requireRole\\\\|validateSession\" \"{}\"')",
+      "Bash(xargs ls *)",
+      "Bash(xargs -I {} sh -c 'if grep -q \"requireRole\" \"{}\"; then echo \"MIXING: {}\"; fi')"
     ]
   }
 }
